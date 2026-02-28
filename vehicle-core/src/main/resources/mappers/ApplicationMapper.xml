@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfs.application.mapper.ApplicationMapper">
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO application(id,user_id,username,start_time,end_time,img_url,departure_addr,destination_addr,reason,remark,status,vehicle_id,reject_reason,create_time)
+        VALUES (NULL,#{userId},#{username},#{startTime},#{endTime},#{imgUrl},#{departureAddr},#{destinationAddr},#{reason},#{remark},#{status},#{vehicleId},#{rejectReason},#{createTime})
+    </insert>
+
+    <select id="selectApplication" resultType="com.xfs.application.pojo.vo.ApplicationVO">
+        SELECT id,user_id,username,start_time,end_time,img_url,departure_addr,destination_addr,reason,remark,status,
+        vehicle_id,reject_reason,create_time,update_time
+        FROM application
+        <where>
+            <if test="status!=null and status!=''">
+                AND status = #{status}
+            </if>
+            <if test="departureAddr!=null and departureAddr!=''">
+                AND departure_addr LIKE CONCAT('%',#{departureAddr},'%')
+            </if>
+            <if test="destinationAddr!=null and destinationAddr!=''">
+                AND destination_addr LIKE CONCAT('%',#{destinationAddr},'%')
+            </if>
+            <if test="username!=null and username!=''">
+                AND username LIKE CONCAT('%',#{username},'%')
+            </if>
+        </where>
+    </select>
+
+    <update id="update">
+        update application
+        <set>
+            <if test="status !=null and status !=''">
+                status = #{status},
+            </if>
+            <if test="updateTime !=null">
+                update_time = #{updateTime},
+            </if>
+            <if test="rejectReason!=null and rejectReason!=''">
+                reject_reason = #{rejectReason},
+            </if>
+            <if test="vehicleId !=null">
+                vehicle_id = #{vehicleId}
+            </if>
+        </set>
+        where id=#{id}
+    </update>
+
+    <update id="back">
+        update application
+        <set>
+            <if test="status !=null and status !=''">
+                status = #{status},
+            </if>
+            <if test="updateTime !=null">
+                update_time = #{updateTime},
+            </if>
+            <if test="vehicleId ==null">
+                vehicle_id = #{vehicleId}
+            </if>
+        </set>
+        where id=#{id}
+    </update>
+</mapper>

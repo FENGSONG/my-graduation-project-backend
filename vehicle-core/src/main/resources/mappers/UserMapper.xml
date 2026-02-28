@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfs.user.mapper.UserMapper">
+    <select id="selectByUsername" resultType="com.xfs.user.pojo.vo.UserVO">
+        SELECT id,username,password,email,phone,age,gender,create_time,update_time,status,level,parent_id
+        FROM user
+        WHERE username=#{username}
+    </select>
+
+    <select id="selectUser" resultType="com.xfs.user.pojo.vo.UserVO">
+        SELECT id,username,password,email,phone,age,gender,create_time,update_time,status,level,parent_id
+        FROM user
+        <where>
+            <if test="username != null and username != ''">
+                username LIKE CONCAT('%',#{username},'%')
+            </if>
+            <if test="status != null and status != ''">
+                AND status=#{status}
+            </if>
+            <if test="level != null and level != ''">
+                AND level= #{level}
+            </if>
+            <if test="id != null">
+                AND id= #{id}
+            </if>
+        </where>
+        ORDER BY create_time DESC
+    </select>
+
+    <insert id="insert">
+        INSERT INTO user(username,password,email,phone,age,gender,create_time,status,level,parent_id)
+        VALUES(#{username},#{password},#{email},#{phone},#{age},#{gender},#{createTime},#{status},#{level},#{parentId})
+    </insert>
+
+    <update id="update">
+        UPDATE user
+        <set>
+            <if test="password!=null and password !=''">
+                password=#{password},
+            </if>
+            <if test="email!=null and email !=''">
+                email=#{email},
+            </if>
+            <if test="level!=null and level !=''">
+                level=#{level},
+            </if>
+            <if test="parentId!=null and parentId !=''">
+                parent_id=#{parentId},
+            </if>
+            <if test="phone!=null and phone !=''">
+                phone=#{phone},
+            </if>
+            <if test="age!=null">
+                age=#{age},
+            </if>
+            <if test="gender!=null and gender !=''">
+                gender=#{gender},
+            </if>
+            <if test="status!=null and status !=''">
+                status=#{status},
+            </if>
+            <if test="updateTime!=null">
+                update_time=#{updateTime}
+            </if>
+        </set>
+        WHERE id=#{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM user WHERE id = #{userId}
+    </delete>
+
+    <select id="selectById" resultType="com.xfs.user.pojo.vo.UserVO">
+        SELECT id,username,password,email,phone,age,gender,create_time,update_time,status,level,parent_id
+        FROM user
+        WHERE id=#{id}
+    </select>
+</mapper>

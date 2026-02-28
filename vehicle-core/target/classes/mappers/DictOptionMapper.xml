@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfs.dictoption.mapper.DictOptionMapper">
+    <select id="selectDictOption" resultType="com.xfs.dictoption.pojo.vo.DictOptionVO">
+        SELECT id,dict_id,label,value,sort,remark,create_time
+        FROM dict_option
+        <where>
+            <if test="id!=null">
+                AND id=#{id}
+            </if>
+            <if test="label!=null and label !=''">
+                AND label LIKE CONCAT('%',#{label},'%')
+            </if>
+            <if test="dictId!=null">
+                AND dict_id=#{dictId}
+            </if>
+        </where>
+        ORDER BY sort
+    </select>
+
+    <insert id="insert">
+        INSERT INTO dict_option(dict_id,label,value,sort,remark,create_time)
+        VALUES(#{dictId},#{label},#{value},#{sort},#{remark},#{createTime})
+    </insert>
+
+    <update id="update">
+        UPDATE dict_option
+        <set>
+            <if test="label!=null and label !=''">
+                label=#{label},
+            </if>
+            <if test="value!=null and value !=''">
+                value=#{value},
+            </if>
+            <if test="sort!=null and sort !=''">
+                sort=#{sort},
+            </if>
+            <if test="remark!=null and remark !=''">
+                remark=#{remark}
+            </if>
+        </set>
+        where id=#{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM dict_option WHERE id=#{id}
+    </delete>
+</mapper>

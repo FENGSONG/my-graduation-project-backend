@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfs.audit.mapper.AuditMapper">
+    <insert id="insert">
+        INSERT INTO audit(id,application_id,audit_user_id,audit_status,audit_sort,create_time)
+        VALUES (NULL,#{applicationId},#{auditUserId},#{auditStatus},#{auditSort},#{createTime})
+    </insert>
+
+    <select id="selectAuditByApplicationId" resultType="com.xfs.audit.pojo.vo.AuditVO">
+        SELECT a.id,a.application_id,a.audit_user_id,a.audit_status,a.audit_sort,
+               v.id,v.user_id,v.username,v.start_time,v.end_time,v.img_url,v.departure_addr,v.destination_addr,
+               v.reason,v.remark,v.status,v.vehicle_id,v.reject_reason
+        FROM audit a INNER JOIN application v ON a.application_id = v.id
+        WHERE v.id = #{id}
+    </select>
+
+    <delete id="deleteByApplicationId">
+        DELETE FROM audit WHERE application_id = #{id}
+    </delete>
+
+    <!-- 因为前端需要展示申请单的一些字段,所以需要关联查询 inner join-->
+    <select id="selectAudit" resultType="com.xfs.audit.pojo.vo.AuditVO">
+        SELECT a.id,a.application_id,a.audit_user_id,a.audit_status,a.audit_sort,
+        v.id,v.user_id,v.username,v.start_time,v.end_time,v.img_url,v.departure_addr,v.destination_addr,
+        v.reason,v.remark,v.status,v.vehicle_id,v.reject_reason
+        FROM audit a INNER JOIN application v ON a.application_id = v.id
+        <where>
+            <if test="id != null">
+                AND a.id = #{id}
+            </if>
+            <if test="applicationId != null">
+                AND a.application_id = #{applicationId}
+            </if>
+            <if test="auditUserId != null">
+                AND a.audit_user_id = #{auditUserId}
+            </if>
+            <if test="auditStatus != null">
+                AND a.audit_status = #{auditStatus}
+            </if>
+            <if test="auditSort != null">
+                AND a.audit_sort = #{auditSort}
+            </if>
+            <if test="username != null">
+                AND v.username LIKE CONCAT('%',#{username},'%')
+            </if>
+        </where>
+    </select>
+
+    <!-- 更新审批单状态   -->
+    <update id="update">
+        UPDATE audit
+        <set>
+            <if test="auditStatus != null and auditStatus != '' ">
+                audit_status = #{auditStatus},
+            </if>
+            <if test="updateTime != null">
+                update_time = #{updateTime},
+            </if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <!--  审批单状态 10待我审核 20待他人审核 30已审核 40驳回  -->
+    <select id="selectRestAuditCount" resultType="Integer">
+        SELECT COUNT(*) FROM audit
+        WHERE application_id = #{applicationId} AND audit_status != 30
+    </select>
+
+    <delete id="deleteById">
+        delete from audit where id=#{id}
+    </delete>
+
+</mapper>
