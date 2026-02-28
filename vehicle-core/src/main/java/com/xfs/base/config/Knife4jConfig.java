@@ -23,9 +23,9 @@ public class Knife4jConfig {
     private Info getApiInfo() {
         return new Info()
                 .title("IVOS API DOC")
-                .description("智慧车辆运营管理系统接口文档")
+                .description("北华智行车辆运营管理系统接口文档")
                 .version("1.0.0")
-                .contact(new Contact().name("程晓宇"));
+                .contact(new Contact().name("许峰崧"));
     }
     //定义Tag顺序
     private List<Tag> getTagsOrdered() {
