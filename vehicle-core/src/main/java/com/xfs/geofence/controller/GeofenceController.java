@@ -54,7 +54,7 @@ public class GeofenceController {
     @Operation(summary = "保存电子围栏")
     @ApiOperationSupport(order = 40)
     @PostMapping("save")
-    public JsonResult saveGeofence(@Validated GeofenceSaveParam geofenceSaveParam){
+    public JsonResult saveGeofence(@Validated @RequestBody GeofenceSaveParam geofenceSaveParam){
         log.debug("保存电子围栏:geofenceSaveParam={}",geofenceSaveParam);
         geofenceService.saveGeofence(geofenceSaveParam);
         return JsonResult.ok();
