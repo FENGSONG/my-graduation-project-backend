@@ -16,4 +16,6 @@ public interface ApplicationMapper {
     void update(Application application);
 
     void back(Application application);
+
+    Application selectById(Long id);
 }

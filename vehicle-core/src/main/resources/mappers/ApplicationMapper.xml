@@ -60,4 +60,8 @@
         </set>
         where id=#{id}
     </update>
+
+    <select id="selectById" resultType="com.xfs.application.pojo.entity.Application">
+        SELECT * FROM application WHERE id = #{id}
+    </select>
 </mapper>

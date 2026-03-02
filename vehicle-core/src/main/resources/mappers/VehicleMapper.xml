@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.xfs.vehicle.mapper.VehicleMapper">
+
     <select id="selectVehicle" resultType="com.xfs.vehicle.pojo.vo.VehicleVO">
         SELECT
         id,brand,license,model,code,displacement,status,type,
@@ -36,68 +37,34 @@
     <update id="update">
         UPDATE vehicle
         <set>
-            <if test="brand!=null and brand!=''">
-                brand=#{brand},
-            </if>
-            <if test="license!=null and license!=''">
-                license=#{license},
-            </if>
-            <if test="model!=null and model!=''">
-                model=#{model},
-            </if>
-            <if test="code!=null and code!=''">
-                code=#{code},
-            </if>
-            <if test="displacement!=null and displacement!=''">
-                displacement=#{displacement},
-            </if>
-            <if test="type!=null and type!=''">
-                type=#{type},
-            </if>
-            <if test="color!=null and color!=''">
-                color=#{color},
-            </if>
-            <if test="kilometers!=null and kilometers!=''">
-                kilometers=#{kilometers},
-            </if>
-            <if test="buyTime!=null">
-                buy_time=#{buyTime},
-            </if>
-            <if test="regTime!=null">
-                reg_time=#{regTime},
-            </if>
-            <if test="updateTime!=null">
-                update_time=#{updateTime},
-            </if>
-            <if test="price!=null and price!=''">
-                price=#{price},
-            </if>
-            <if test="batteryType!=null and batteryType!=''">
-                battery_type=#{batteryType},
-            </if>
-            <if test="geofenceBindStatus!=null and geofenceBindStatus!=''">
-                geofence_bind_status=#{geofenceBindStatus},
-            </if>
-            <if test="geofenceId!=null">
-                geofence_id=#{geofenceId},
-            </if>
-            <if test="status!=null and status!=''">
-                status=#{status}
-            </if>
+            <if test="brand!=null and brand!=''">brand=#{brand},</if>
+            <if test="license!=null and license!=''">license=#{license},</if>
+            <if test="model!=null and model!=''">model=#{model},</if>
+            <if test="code!=null and code!=''">code=#{code},</if>
+            <if test="displacement!=null and displacement!=''">displacement=#{displacement},</if>
+            <if test="type!=null and type!=''">type=#{type},</if>
+            <if test="color!=null and color!=''">color=#{color},</if>
+            <if test="kilometers!=null and kilometers!=''">kilometers=#{kilometers},</if>
+            <if test="buyTime!=null">buy_time=#{buyTime},</if>
+            <if test="regTime!=null">reg_time=#{regTime},</if>
+            <if test="updateTime!=null">update_time=#{updateTime},</if>
+            <if test="price!=null and price!=''">price=#{price},</if>
+            <if test="batteryType!=null and batteryType!=''">battery_type=#{batteryType},</if>
+            <if test="geofenceBindStatus!=null and geofenceBindStatus!=''">geofence_bind_status=#{geofenceBindStatus},</if>
+            <if test="geofenceId!=null">geofence_id=#{geofenceId},</if>
+            <if test="status!=null and status!=''">status=#{status}</if>
         </set>
         WHERE id=#{id}
     </update>
 
-
     <select id="selectVehicleByLincense" resultType="com.xfs.vehicle.pojo.vo.VehicleVO">
         SELECT
-        id,brand,license,model,code,displacement,status,type,
-        color,kilometers,reg_time,buy_time,price,battery_type,
-        geofence_bind_status,geofence_id,create_time,update_time
+            id,brand,license,model,code,displacement,status,type,
+            color,kilometers,reg_time,buy_time,price,battery_type,
+            geofence_bind_status,geofence_id,create_time,update_time
         FROM vehicle
         WHERE license=#{license}
     </select>
-
 
     <delete id="deleteById">
         DELETE FROM vehicle WHERE id=#{id}
@@ -106,17 +73,29 @@
     <update id="updateNullValue">
         UPDATE vehicle
         <set>
-            <if test="updateTime!=null">
-                update_time=#{updateTime},
-            </if>
-            <if test="geofenceBindStatus!=null and geofenceBindStatus!=''">
-                geofence_bind_status=#{geofenceBindStatus},
-            </if>
-            <if test="geofenceId==null">
-                geofence_id=#{geofenceId}
-            </if>
+            <if test="updateTime!=null">update_time=#{updateTime},</if>
+            <if test="geofenceBindStatus!=null and geofenceBindStatus!=''">geofence_bind_status=#{geofenceBindStatus},</if>
+            <if test="geofenceId==null">geofence_id=#{geofenceId}</if>
         </set>
         WHERE id=#{id}
     </update>
+
+    <select id="findAvailableVehicles" resultType="com.xfs.vehicle.pojo.vo.VehicleVO">
+        SELECT
+            v.id, v.brand, v.license, v.model, v.code, v.displacement, v.status, v.type,
+            v.color, v.kilometers, v.reg_time, v.buy_time, v.price, v.battery_type,
+            v.geofence_bind_status, v.geofence_id, v.create_time, v.update_time
+        FROM vehicle v
+        WHERE v.status = '1'  AND v.id NOT IN (
+            SELECT a.vehicle_id
+            FROM application a
+            WHERE a.vehicle_id IS NOT NULL
+              AND a.status IN ('20', '30')
+              AND (
+                #{endTime} &gt; a.start_time
+                    AND #{startTime} &lt; a.end_time
+                )
+        )
+    </select>
 
 </mapper>

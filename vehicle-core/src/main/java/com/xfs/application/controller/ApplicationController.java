@@ -1,6 +1,5 @@
 package com.xfs.application.controller;
 
-
 import com.xfs.application.pojo.dto.ApplicationQuery;
 import com.xfs.base.response.JsonResult;
 import com.xfs.application.pojo.dto.ApplicationSaveParam;
@@ -21,6 +20,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/v1/application")
 public class ApplicationController {
+
     @Autowired
     ApplicationService applicationService;
 
@@ -52,8 +52,7 @@ public class ApplicationController {
         return JsonResult.ok();
     }
 
-
-    @Operation(summary = "分配车辆")
+    @Operation(summary = "手动分配车辆")
     @ApiOperationSupport(order = 40)
     @PostMapping("distribute/{applicationId}/{vehicleId}")
     public JsonResult distribute(@PathVariable Long applicationId, @PathVariable Long vehicleId){
@@ -61,6 +60,24 @@ public class ApplicationController {
         applicationService.distribute(applicationId,vehicleId);
         return JsonResult.ok();
     }
+
+    // ================== 新增：自动调度车辆接口 ==================
+    @Operation(summary = "系统自动分配车辆")
+    @ApiOperationSupport(order = 45) // 排序放在手动分配和还车之间
+    @PostMapping("autoDistribute/{applicationId}")
+    public JsonResult autoDistribute(@PathVariable Long applicationId){
+        log.debug("触发自动分配车辆机制，申请单编号:{}", applicationId);
+        // 调用 Service 层的自动分配逻辑，返回 true 表示成功，false 表示无车
+        boolean isSuccess = applicationService.autoDistribute(applicationId);
+
+        if (isSuccess) {
+            return JsonResult.ok("自动分配成功！");
+        } else {
+            // 返回 false 给前端，前端可以提示“当前时间段无可用车辆，已转入人工排队”
+            return JsonResult.ok("无可用车辆");
+        }
+    }
+    // ============================================================
 
     @Operation(summary = "还车")
     @ApiOperationSupport(order = 50)
@@ -70,19 +87,4 @@ public class ApplicationController {
         applicationService.back(applicationId,vehicleId);
         return JsonResult.ok();
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }

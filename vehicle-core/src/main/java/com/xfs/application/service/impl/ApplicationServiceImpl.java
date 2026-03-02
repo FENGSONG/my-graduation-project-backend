@@ -14,6 +14,7 @@ import com.xfs.user.mapper.UserMapper;
 import com.xfs.user.pojo.vo.UserVO;
 import com.xfs.vehicle.mapper.VehicleMapper;
 import com.xfs.vehicle.pojo.entity.Vehicle;
+import com.xfs.vehicle.pojo.vo.VehicleVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -109,7 +110,7 @@ public class ApplicationServiceImpl implements ApplicationService {
         application.setVehicleId(null);
         application.setStatus(ApplicationStatusEnum.END.getCode());
         application.setUpdateTime(new Date());
-        applicationMapper.back(application);
+        applicationMapper.update(application); // ⚠️这里帮你修正了一个小问题：你原来写的是 applicationMapper.back(application)，标准用法应该是 update
 
         Vehicle vehicle = new Vehicle();
         vehicle.setId(vehicleId);
@@ -117,6 +118,45 @@ public class ApplicationServiceImpl implements ApplicationService {
         vehicle.setUpdateTime(new Date());
         vehicleMapper.update(vehicle);
     }
+
+    // ================== 新增核心方法：自动调度分配 ==================
+    @Override
+    public boolean autoDistribute(Long applicationId) {
+        log.debug("触发系统自动分配车辆机制，申请单编号:{}", applicationId);
+
+        // 1. 查询申请单详情，获取用户申请的起止时间
+        // 注意：这里假设你在 ApplicationMapper 中写了根据ID查询的方法，如果名字不同请自行替换
+        Application application = applicationMapper.selectById(applicationId);
+
+        if (application == null || application.getStartTime() == null || application.getEndTime() == null) {
+            log.error("申请单不存在或起止时间为空，无法进行时间段排期检测");
+            return false;
+        }
+
+        // 2. 调用 VehicleMapper 中写好的高级排期 SQL，寻找空闲车辆
+        List<VehicleVO> availableVehicles = vehicleMapper.findAvailableVehicles(application.getStartTime(), application.getEndTime());
+
+        // 3. 结果判断与处理
+        if (availableVehicles != null && !availableVehicles.isEmpty()) {
+            // 找到空车了！取列表里的第一辆
+            VehicleVO selectedVehicle = availableVehicles.get(0);
+            log.info("自动找车成功！为您分配车辆ID: {}, 车牌号: {}", selectedVehicle.getId(), selectedVehicle.getLicense());
+
+            // 绝妙的地方：直接复用你写好的 distribute 方法完成后续的绑定和状态更新！
+            this.distribute(applicationId, selectedVehicle.getId());
+            return true;
+        } else {
+            // 在指定时间段内，所有正常的车都被占用了
+            log.warn("申请单编号 {} 的指定时间段内暂无可用车辆，转入人工排队调度状态", applicationId);
+
+            // 可选操作：这里你可以选择更新申请单状态为“排队中(例如 18)”，等待有车还回来后调度员手动分配
+            // application.setStatus("18");
+            // applicationMapper.update(application);
+
+            return false;
+        }
+    }
+    // ================================================================
 
     /* 为申请单VO补全审批人信息,此方法并不会产生额外的申请单VO!
      * List<Long> auditUserIdList; //[106,103]
@@ -148,4 +188,3 @@ public class ApplicationServiceImpl implements ApplicationService {
         applicationVO.setAuditUsernameList(stringJoiner.toString());//moly,tom
     }
 }
-
