@@ -2,6 +2,7 @@ package com.xfs.audit.service.impl;
 
 import com.xfs.application.mapper.ApplicationMapper;
 import com.xfs.application.pojo.entity.Application;
+import com.xfs.application.service.ApplicationService;
 import com.xfs.audit.mapper.AuditMapper;
 import com.xfs.audit.pojo.dto.AuditQuery;
 import com.xfs.audit.pojo.dto.AuditSaveParam;
@@ -15,6 +16,7 @@ import com.xfs.user.pojo.vo.UserVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,7 +26,7 @@ import java.util.List;
 import java.util.StringJoiner;
 
 /* @Transactional是Spring框架提供的一个用于管理事务的注解,用来管理类或方法上的事务行为
-* 在对数据库做操作的时候,可以确保方法中的所有数据库操作都在同一个事务中执行,要么都成功,要么都失败 */
+ * 在对数据库做操作的时候,可以确保方法中的所有数据库操作都在同一个事务中执行,要么都成功,要么都失败 */
 @Transactional
 @Service
 @Slf4j
@@ -35,6 +37,11 @@ public class AuditServiceImpl implements AuditService {
     UserMapper userMapper;
     @Autowired
     ApplicationMapper applicationMapper;
+
+    // ⚠️ 新增注入 ApplicationService，必须加 @Lazy 防止与 ApplicationServiceImpl 发生循环依赖
+    @Autowired
+    @Lazy
+    private ApplicationService applicationService;
 
     @Override
     public void insertAudit(Application application) {
@@ -110,9 +117,23 @@ public class AuditServiceImpl implements AuditService {
                 //还需要设置申请单为审核中
                 application.setStatus(ApplicationStatusEnum.AUDIT.getCode());
                 applicationMapper.update(application);
-            }else{//没有未审批的审批单了
+            }else{//没有未审批的审批单了 (代表最终审批通过)
+
+                // 1. 先将申请单状态更新为“审批通过”
                 application.setStatus(ApplicationStatusEnum.AUDITED.getCode());
                 applicationMapper.update(application);
+
+                // ================== 核心联动：触发系统自动分车 ==================
+                log.info("申请单 {} 所有审批已通过，开始触发系统自动排期与分车...", audit.getApplicationId());
+                boolean isSuccess = applicationService.autoDistribute(audit.getApplicationId());
+
+                if (isSuccess) {
+                    log.info("🎉 申请单 {} 自动分车成功！无需人工干预。", audit.getApplicationId());
+                } else {
+                    log.warn("⚠️ 申请单 {} 自动分车未命中（无空闲车辆），已流转至调度员人工处理待办列表。", audit.getApplicationId());
+                    // 如果有必要，你可以在这里额外加一行代码，把 application 的状态改为"待人工调度"
+                }
+                // ================================================================
             }
         }else if(audit.getAuditStatus().equals(AuditStatusEnum.REJECT.getCode())){//驳回处理
             AuditQuery auditQuery = new AuditQuery();
