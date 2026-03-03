@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody; // 🍎 新增：引入 RequestBody 注解
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -38,7 +39,8 @@ public class AuditController {
     @Operation(summary = "审批申请单")
     @ApiOperationSupport(order = 20)
     @PostMapping("update")
-    public JsonResult updateAudit(@Validated AuditSaveParam auditSaveParam){
+    // 🍎 核心修改：加上了 @RequestBody，让 Spring Boot 能够正确解析前端发来的 JSON 数据
+    public JsonResult updateAudit(@RequestBody @Validated AuditSaveParam auditSaveParam){
         log.debug("审批申请单:{}",auditSaveParam);
         auditService.updateAudit(auditSaveParam);
         return JsonResult.ok();

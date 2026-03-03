@@ -17,4 +17,6 @@ public class AuditQuery {
     private Integer auditSort;
     @Schema(description = "用车人姓名")
     private String username;
+    @Schema(description = "关键字")
+    private String keyword;
 }
