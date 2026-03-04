@@ -49,13 +49,46 @@ public class ApplicationServiceImpl implements ApplicationService {
         application.setStatus(ApplicationStatusEnum.PENDING.getCode());
         application.setCreateTime(new Date());
 
+        // ================== 核心修复：防空指针 + 全自动动态找领导 ==================
+        List<Long> dynamicAuditUserIds = new ArrayList<>(); // 实例化集合，确保绝对不为 null
+        Long currentUserId = application.getUserId();
+
+        // 1. 尝试根据当前申请人，动态向上找直属领导
+        if (currentUserId != null) {
+            UserVO currentUser = userMapper.selectById(currentUserId);
+            if (currentUser != null && currentUser.getParentId() != null) {
+                Long parentId = currentUser.getParentId();
+                int maxDepth = 5; // 防护机制：最多向上找 5 级领导，防止数据脏乱导致死循环
+
+                while (parentId != null && parentId != 0 && maxDepth > 0) {
+                    dynamicAuditUserIds.add(parentId); // 将找到的领导 ID 加入审批列表
+
+                    // 继续查这位领导，看他是否还有上级
+                    UserVO parentUser = userMapper.selectById(parentId);
+                    parentId = (parentUser != null) ? parentUser.getParentId() : null;
+                    maxDepth--;
+                }
+            }
+        }
+
+        // 2. 【安全兜底】：如果该员工没有上级，或者没查到数据，给一个默认审批人，坚决不传空集合！
+        if (dynamicAuditUserIds.isEmpty()) {
+            log.warn("未找到用户 {} 的直属领导，启用默认兜底审批人", currentUserId);
+            // 随便塞一个默认的审批人ID进去，假设 2 号用户是超级管理员或经理
+            dynamicAuditUserIds.add(2L);
+        }
+
+        // 将组装好的、绝对不可能为空的审批人列表放进 application 对象
+        application.setAuditUserIdList(dynamicAuditUserIds);
+        // ====================================================================
+
         /* 遇到的问题:新增申请单对应的审批单时,审批单数据没有此申请单id
         原因:执行insert方法的SQL时,并没有把刚刚生成的申请单id回填到application对象中
         解决办法:给此SQL上加useGeneratedKeys="true" keyProperty="id"属性
         效果:JDBC自动回填此申请单id到application对象的id属性中,再传给审批,审批就拿到申请单id了*/
         applicationMapper.insert(application);
 
-        //生成申请单后,要为此申请单生成对应的审批单
+        // 生成申请单后,要为此申请单生成对应的审批单（此时集合安全，不再报 NullPointerException）
         auditService.insertAudit(application);
     }
 
@@ -110,7 +143,9 @@ public class ApplicationServiceImpl implements ApplicationService {
         application.setVehicleId(null);
         application.setStatus(ApplicationStatusEnum.END.getCode());
         application.setUpdateTime(new Date());
-        applicationMapper.update(application); // ⚠️这里帮你修正了一个小问题：你原来写的是 applicationMapper.back(application)，标准用法应该是 update
+
+        // 【已修改】：这里改用 applicationMapper.back，触发XML中把 vehicle_id 置空的特定逻辑
+        applicationMapper.back(application);
 
         Vehicle vehicle = new Vehicle();
         vehicle.setId(vehicleId);
@@ -124,8 +159,6 @@ public class ApplicationServiceImpl implements ApplicationService {
     public boolean autoDistribute(Long applicationId) {
         log.debug("触发系统自动分配车辆机制，申请单编号:{}", applicationId);
 
-        // 1. 查询申请单详情，获取用户申请的起止时间
-        // 注意：这里假设你在 ApplicationMapper 中写了根据ID查询的方法，如果名字不同请自行替换
         Application application = applicationMapper.selectById(applicationId);
 
         if (application == null || application.getStartTime() == null || application.getEndTime() == null) {
@@ -133,26 +166,16 @@ public class ApplicationServiceImpl implements ApplicationService {
             return false;
         }
 
-        // 2. 调用 VehicleMapper 中写好的高级排期 SQL，寻找空闲车辆
         List<VehicleVO> availableVehicles = vehicleMapper.findAvailableVehicles(application.getStartTime(), application.getEndTime());
 
-        // 3. 结果判断与处理
         if (availableVehicles != null && !availableVehicles.isEmpty()) {
-            // 找到空车了！取列表里的第一辆
             VehicleVO selectedVehicle = availableVehicles.get(0);
             log.info("自动找车成功！为您分配车辆ID: {}, 车牌号: {}", selectedVehicle.getId(), selectedVehicle.getLicense());
 
-            // 绝妙的地方：直接复用你写好的 distribute 方法完成后续的绑定和状态更新！
             this.distribute(applicationId, selectedVehicle.getId());
             return true;
         } else {
-            // 在指定时间段内，所有正常的车都被占用了
             log.warn("申请单编号 {} 的指定时间段内暂无可用车辆，转入人工排队调度状态", applicationId);
-
-            // 可选操作：这里你可以选择更新申请单状态为“排队中(例如 18)”，等待有车还回来后调度员手动分配
-            // application.setStatus("18");
-            // applicationMapper.update(application);
-
             return false;
         }
     }
@@ -175,7 +198,9 @@ public class ApplicationServiceImpl implements ApplicationService {
             Long id = auditVO.getAuditUserId();
             auditUserIdList.add(id);//添加到空集合中
             UserVO userVO = userMapper.selectById(id);//根据审批人id查询审批人VO
-            auditUsernameList.add(userVO.getUsername());//将审批人姓名存入空集合中
+            if(userVO != null) {
+                auditUsernameList.add(userVO.getUsername());//将审批人姓名存入空集合中
+            }
         }
         //准备拼接工具,拼接的连接符号是逗号
         StringJoiner stringJoiner = new StringJoiner(",");

@@ -25,8 +25,6 @@ import java.util.Date;
 import java.util.List;
 import java.util.StringJoiner;
 
-/* @Transactional是Spring框架提供的一个用于管理事务的注解,用来管理类或方法上的事务行为
- * 在对数据库做操作的时候,可以确保方法中的所有数据库操作都在同一个事务中执行,要么都成功,要么都失败 */
 @Transactional
 @Service
 @Slf4j
@@ -38,7 +36,6 @@ public class AuditServiceImpl implements AuditService {
     @Autowired
     ApplicationMapper applicationMapper;
 
-    // ⚠️ 新增注入 ApplicationService，必须加 @Lazy 防止与 ApplicationServiceImpl 发生循环依赖
     @Autowired
     @Lazy
     private ApplicationService applicationService;
@@ -46,22 +43,27 @@ public class AuditServiceImpl implements AuditService {
     @Override
     public void insertAudit(Application application) {
         log.debug("为当前申请单生成对应审批单的业务，参数：{}", application);
-        //1.遍历审批人id集合 [106,103]
         List<Long> userIdList = application.getAuditUserIdList();
+
+        // 🍎 健壮性保护：防空指针
+        if (userIdList == null || userIdList.isEmpty()) {
+            log.warn("申请单 {} 没有审批人，不生成审批流", application.getId());
+            return;
+        }
+
         for(int i = 0; i < userIdList.size(); i++){
-            //2.循环几次,就代表有几个审批人id,就要生成几条审批数据
             Audit audit = new Audit();
-            //3.设置本条审批单的相关数据
-            audit.setApplicationId(application.getId());//申请单id
-            audit.setAuditUserId(userIdList.get(i));//审批人id
-            audit.setAuditSort(i);//审批顺序 0 1
-            audit.setCreateTime(new Date());//创建时间
-            if(i == 0){//如果是第一条审批单,审批状态为"待我审核"
-                audit.setAuditStatus(AuditStatusEnum.MY_PENDING.getCode());
-            }else{//如果不是第一条审批单,审批状态为"待他人审核"
-                audit.setAuditStatus(AuditStatusEnum.PENDING.getCode());
+            audit.setApplicationId(application.getId());
+            audit.setAuditUserId(userIdList.get(i));
+            audit.setAuditSort(i);
+            audit.setCreateTime(new Date());
+
+            if(i == 0){
+                audit.setAuditStatus("10"); // 第一级：待我审核
+            }else{
+                audit.setAuditStatus("20"); // 后续级：待他人审核
             }
-            auditMapper.insert(audit);//4.插入准备好的审批单数据
+            auditMapper.insert(audit);
         }
     }
 
@@ -83,94 +85,116 @@ public class AuditServiceImpl implements AuditService {
 
     @Override
     public void updateAudit(AuditSaveParam auditSaveParam) {
-        log.debug("审批申请单业务:auditSaveParam={}",auditSaveParam);
+        log.debug("====== 审批流转处理开始，参数：{} ======", auditSaveParam);
+
+        // 1. 更新当前审批单状态（同意或驳回）
         Audit audit = new Audit();
-        BeanUtils.copyProperties(auditSaveParam, audit);//这里也包括前端传过来的审批状态30 40
-        audit.setUpdateTime(new Date());//更新时间
+        BeanUtils.copyProperties(auditSaveParam, audit);
+        audit.setUpdateTime(new Date());
         auditMapper.update(audit);
 
-        //准备当前要更新的申请单对象
+        // 2. 准备更新主申请单的对象
         Application application = new Application();
         application.setId(audit.getApplicationId());
         application.setUpdateTime(new Date());
 
-        //判断前端传过来的操作是通过还是驳回,分头处理
-        if(audit.getAuditStatus().equals(AuditStatusEnum.AUDITED.getCode())){//通过处理
-            /* 继续查其它审批单:其它审批单与当前审批单,批同一个申请单 */
-            AuditQuery auditQuery = new AuditQuery();
-            auditQuery.setApplicationId(audit.getApplicationId());
-            //根据申请单id查询批此申请单的所有未审批的审批单总数
-            Integer count = auditMapper.selectRestAuditCount(auditQuery);
-            if(count > 0){//还有未审批的审批单
-                //继续封装下一个审批单的查询条件:批同一个申请单,且为刚刚审批单的次序+1
-                auditQuery.setAuditSort(audit.getAuditSort() + 1);
-                List<AuditVO> auditVOList = auditMapper.selectAudit(auditQuery);
-                if(auditVOList != null && auditVOList.size() > 0){
-                    AuditVO auditVO = auditVOList.get(0);
-                    //创建第2个审批单对象,用于数据库更新
-                    Audit audit2 = new Audit();
-                    audit2.setId(auditVO.getId());
-                    audit2.setAuditStatus(AuditStatusEnum.MY_PENDING.getCode());
-                    audit2.setUpdateTime(new Date());
-                    auditMapper.update(audit2);
-                }
-                //还需要设置申请单为审核中
-                application.setStatus(ApplicationStatusEnum.AUDIT.getCode());
-                applicationMapper.update(application);
-            }else{//没有未审批的审批单了 (代表最终审批通过)
+        // ========================================================
+        // 🍎 核心逻辑分支：同意(30) or 驳回(40)
+        // 使用 String.valueOf() 确保无论前后端传的是字符串还是数字都能匹配
+        String currentStatus = String.valueOf(audit.getAuditStatus());
 
-                // 1. 先将申请单状态更新为“审批通过”
-                application.setStatus(ApplicationStatusEnum.AUDITED.getCode());
-                applicationMapper.update(application);
+        if("30".equals(currentStatus)) {
+            // ----- 【同意处理分支】 -----
 
-                // ================== 核心联动：触发系统自动分车 ==================
-                log.info("申请单 {} 所有审批已通过，开始触发系统自动排期与分车...", audit.getApplicationId());
-                boolean isSuccess = applicationService.autoDistribute(audit.getApplicationId());
+            // 查询该申请单下的所有审批节点（通过 selectAuditByApplicationId 方法，这个方法你肯定写对了）
+            List<AuditVO> allAudits = auditMapper.selectAuditByApplicationId(audit.getApplicationId());
 
-                if (isSuccess) {
-                    log.info("🎉 申请单 {} 自动分车成功！无需人工干预。", audit.getApplicationId());
-                } else {
-                    log.warn("⚠️ 申请单 {} 自动分车未命中（无空闲车辆），已流转至调度员人工处理待办列表。", audit.getApplicationId());
-                    // 如果有必要，你可以在这里额外加一行代码，把 application 的状态改为"待人工调度"
-                }
-                // ================================================================
-            }
-        }else if(audit.getAuditStatus().equals(AuditStatusEnum.REJECT.getCode())){//驳回处理
-            AuditQuery auditQuery = new AuditQuery();
-            auditQuery.setApplicationId(audit.getApplicationId());
-            List<AuditVO> auditVOList = auditMapper.selectAudit(auditQuery);
-            if(auditVOList != null && auditVOList.size() > 0){
-                for(int i = 0;i < auditVOList.size();i++){
-                    AuditVO auditVO = auditVOList.get(i);
-                    if(auditVO.getAuditStatus().equals(AuditStatusEnum.PENDING.getCode())){
-                        auditMapper.deleteById(auditVO.getId());
+            // 寻找下一个审批人节点：即 auditSort 比当前大 1 的那条记录
+            AuditVO nextAudit = null;
+            Integer currentSort = audit.getAuditSort();
+
+            if (allAudits != null && currentSort != null) {
+                for (AuditVO a : allAudits) {
+                    if (a.getAuditSort() == currentSort + 1) {
+                        nextAudit = a;
+                        break;
                     }
                 }
             }
-            application.setStatus(ApplicationStatusEnum.REJECT.getCode());
+
+            if(nextAudit != null) {
+                // 场景 A：还有下一个审批人！
+                log.info("申请单 {} 已通过第 {} 级审批，正在流转给第 {} 级...", audit.getApplicationId(), currentSort, currentSort + 1);
+
+                // 1. 唤醒下一个审批人（把他的状态从 20 改为 10）
+                Audit updateNext = new Audit();
+                updateNext.setId(nextAudit.getId());
+                updateNext.setAuditStatus("10"); // 10代表“待我审核”
+                updateNext.setUpdateTime(new Date());
+                auditMapper.update(updateNext);
+
+                // 2. 将主申请单状态设置为“审核中(30)”
+                application.setStatus("30");
+                applicationMapper.update(application);
+
+            } else {
+                // 场景 B：没有下一个审批人了！（终审通过）
+                log.info("申请单 {} 所有审批已全票通过！正在触发自动派车...", audit.getApplicationId());
+
+                // 1. 先将申请单状态更新为“已通过(50)”
+                application.setStatus("50");
+                applicationMapper.update(application);
+
+                // 2. 触发自动分车
+                boolean isSuccess = applicationService.autoDistribute(audit.getApplicationId());
+
+                if (isSuccess) {
+                    log.info("🎉 申请单 {} 自动分车成功！", audit.getApplicationId());
+                } else {
+                    log.warn("⚠️ 申请单 {} 指定时间段无空车，流转至人工调度。", audit.getApplicationId());
+                }
+            }
+
+        } else if("40".equals(currentStatus)) {
+            // ----- 【驳回处理分支】 -----
+            log.info("申请单 {} 被驳回！终止后续审批流...", audit.getApplicationId());
+
+            // 找出并删除后续那些还没开始审的节点（状态为 20 的）
+            List<AuditVO> allAudits = auditMapper.selectAuditByApplicationId(audit.getApplicationId());
+            if(allAudits != null) {
+                for(AuditVO a : allAudits) {
+                    if("20".equals(String.valueOf(a.getAuditStatus()))) {
+                        auditMapper.deleteById(a.getId());
+                    }
+                }
+            }
+
+            // 将主申请单状态直接改为“驳回(40)”
+            application.setStatus("40");
             application.setRejectReason(auditSaveParam.getRejectReason());
             applicationMapper.update(application);
         }
+        log.debug("====== 审批流转处理结束 ======");
     }
 
     private void assignAuditUserList(AuditVO auditVO) {
-        List<String> auditUsernameList = new ArrayList<>();//创建一个用来装审批人姓名的空集合
-        List<Long> auditUserIdList = new ArrayList<>();//创建一个用来装审批人id的空集合
-        //根据审批单VO中的申请单id,查询当前审批单对应的申请单下的所有审批单数据
-        List<AuditVO> auditVOList =
-                auditMapper.selectAuditByApplicationId(auditVO.getApplicationId());
-        //遍历每一个审批单,获取每个审批单中的审批人id与姓名
-        for(int i = 0;i <auditVOList.size();i++){
-            Long userId = auditVOList.get(i).getAuditUserId();//获取当前遍历到的审批单的审批人id
-            auditUserIdList.add(userId);//将当前的审批人id装到上面的id空集合中
-            UserVO user = userMapper.selectById(userId);//根据用户id查出用户VO
-            auditUsernameList.add(user.getUsername());//将当前的审批人姓名装到上面的name空集合中
+        List<String> auditUsernameList = new ArrayList<>();
+        List<Long> auditUserIdList = new ArrayList<>();
+        List<AuditVO> auditVOList = auditMapper.selectAuditByApplicationId(auditVO.getApplicationId());
+
+        for(int i = 0; i < auditVOList.size(); i++){
+            Long userId = auditVOList.get(i).getAuditUserId();
+            auditUserIdList.add(userId);
+            UserVO user = userMapper.selectById(userId);
+            if (user != null) {
+                auditUsernameList.add(user.getUsername());
+            }
         }
-        StringJoiner stringJoiner = new StringJoiner(",");//准备拼接工具
-        for (String username : auditUsernameList){//遍历审批人姓名集合并进行拼接
+        StringJoiner stringJoiner = new StringJoiner(",");
+        for (String username : auditUsernameList){
             stringJoiner.add(username);
         }
-        auditVO.setAuditUserIdList(auditUserIdList);//将审批人id数据赋值给审批单VO
-        auditVO.setAuditUsernameList(stringJoiner.toString());//将审批人姓名字符串赋值给审批单VO
+        auditVO.setAuditUserIdList(auditUserIdList);
+        auditVO.setAuditUsernameList(stringJoiner.toString());
     }
 }
