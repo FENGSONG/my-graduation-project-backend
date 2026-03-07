@@ -90,7 +90,8 @@
             SELECT a.vehicle_id
             FROM application a
             WHERE a.vehicle_id IS NOT NULL
-              AND a.status IN ('20', '30')
+              -- 60代表“分配用车”，排查掉在这个时间段内处于“分配用车”状态的申请单所绑定的车辆
+              AND a.status = '60'
               AND (
                 #{endTime} &gt; a.start_time
                     AND #{startTime} &lt; a.end_time

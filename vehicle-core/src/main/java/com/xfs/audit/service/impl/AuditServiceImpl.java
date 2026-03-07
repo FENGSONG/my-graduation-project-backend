@@ -44,24 +44,16 @@ public class AuditServiceImpl implements AuditService {
     public void insertAudit(Application application) {
         log.debug("为当前申请单生成对应审批单的业务，参数：{}", application);
         List<Long> userIdList = application.getAuditUserIdList();
-
-        // 🍎 健壮性保护：防空指针
-        if (userIdList == null || userIdList.isEmpty()) {
-            log.warn("申请单 {} 没有审批人，不生成审批流", application.getId());
-            return;
-        }
-
         for(int i = 0; i < userIdList.size(); i++){
             Audit audit = new Audit();
             audit.setApplicationId(application.getId());
             audit.setAuditUserId(userIdList.get(i));
             audit.setAuditSort(i);
             audit.setCreateTime(new Date());
-
             if(i == 0){
-                audit.setAuditStatus("10"); // 第一级：待我审核
+                audit.setAuditStatus(AuditStatusEnum.MY_PENDING.getCode());
             }else{
-                audit.setAuditStatus("20"); // 后续级：待他人审核
+                audit.setAuditStatus(AuditStatusEnum.PENDING.getCode());
             }
             auditMapper.insert(audit);
         }
@@ -85,108 +77,86 @@ public class AuditServiceImpl implements AuditService {
 
     @Override
     public void updateAudit(AuditSaveParam auditSaveParam) {
-        log.debug("====== 审批流转处理开始，参数：{} ======", auditSaveParam);
-
-        // 1. 更新当前审批单状态（同意或驳回）
+        log.debug("审批申请单业务:auditSaveParam={}",auditSaveParam);
         Audit audit = new Audit();
         BeanUtils.copyProperties(auditSaveParam, audit);
         audit.setUpdateTime(new Date());
+        // 1. 先将当前操作人(例如 moly)的记录更新为已通过(30)
         auditMapper.update(audit);
 
-        // 2. 准备更新主申请单的对象
         Application application = new Application();
         application.setId(audit.getApplicationId());
         application.setUpdateTime(new Date());
 
-        // ========================================================
-        // 🍎 核心逻辑分支：同意(30) or 驳回(40)
-        // 使用 String.valueOf() 确保无论前后端传的是字符串还是数字都能匹配
-        String currentStatus = String.valueOf(audit.getAuditStatus());
+        if(audit.getAuditStatus().equals(AuditStatusEnum.AUDITED.getCode())){ // 30 审核通过处理
 
-        if("30".equals(currentStatus)) {
-            // ----- 【同意处理分支】 -----
+            // ================== 核心修复：精准寻找下一位审批人 ==================
+            AuditQuery query = new AuditQuery();
+            query.setApplicationId(audit.getApplicationId());
+            // 把该单据所有的审批流（moly, tom, shaoyun）一口气全查出来
+            List<AuditVO> allAudits = auditMapper.selectAudit(query);
 
-            // 查询该申请单下的所有审批节点（通过 selectAuditByApplicationId 方法，这个方法你肯定写对了）
-            List<AuditVO> allAudits = auditMapper.selectAuditByApplicationId(audit.getApplicationId());
-
-            // 寻找下一个审批人节点：即 auditSort 比当前大 1 的那条记录
             AuditVO nextAudit = null;
-            Integer currentSort = audit.getAuditSort();
-
-            if (allAudits != null && currentSort != null) {
-                for (AuditVO a : allAudits) {
-                    if (a.getAuditSort() == currentSort + 1) {
-                        nextAudit = a;
-                        break;
+            // 遍历寻找状态仍然是 "20" (待他人审核) 并且排序最靠前的那个人
+            for (AuditVO vo : allAudits) {
+                if (AuditStatusEnum.PENDING.getCode().equals(vo.getAuditStatus())) {
+                    if (nextAudit == null || vo.getAuditSort() < nextAudit.getAuditSort()) {
+                        nextAudit = vo; // 精准锁定 tom
                     }
                 }
             }
 
-            if(nextAudit != null) {
-                // 场景 A：还有下一个审批人！
-                log.info("申请单 {} 已通过第 {} 级审批，正在流转给第 {} 级...", audit.getApplicationId(), currentSort, currentSort + 1);
+            if (nextAudit != null) {
+                // 找到了下一个人（tom），把他的状态改成 "10" (待我审核)，从而在他的列表里显现
+                log.info("流转成功！即将激活下一位审批人: 用户ID={}, 排序={}", nextAudit.getAuditUserId(), nextAudit.getAuditSort());
+                Audit audit2 = new Audit();
+                audit2.setId(nextAudit.getId());
+                audit2.setAuditStatus(AuditStatusEnum.MY_PENDING.getCode()); // 10
+                audit2.setUpdateTime(new Date());
+                auditMapper.update(audit2);
 
-                // 1. 唤醒下一个审批人（把他的状态从 20 改为 10）
-                Audit updateNext = new Audit();
-                updateNext.setId(nextAudit.getId());
-                updateNext.setAuditStatus("10"); // 10代表“待我审核”
-                updateNext.setUpdateTime(new Date());
-                auditMapper.update(updateNext);
-
-                // 2. 将主申请单状态设置为“审核中(30)”
-                application.setStatus("30");
+                // 申请单仍保持审核中
+                application.setStatus(ApplicationStatusEnum.AUDIT.getCode());
                 applicationMapper.update(application);
-
             } else {
-                // 场景 B：没有下一个审批人了！（终审通过）
-                log.info("申请单 {} 所有审批已全票通过！正在触发自动派车...", audit.getApplicationId());
-
-                // 1. 先将申请单状态更新为“已通过(50)”
-                application.setStatus("50");
+                // 如果没有状态为 20 的人了，说明最后一位大领导(shaoyun)也批完了！
+                log.info("所有领导审批完毕！申请单 {} 正式通过", audit.getApplicationId());
+                application.setStatus(ApplicationStatusEnum.AUDITED.getCode());
                 applicationMapper.update(application);
 
-                // 2. 触发自动分车
-                boolean isSuccess = applicationService.autoDistribute(audit.getApplicationId());
-
-                if (isSuccess) {
-                    log.info("🎉 申请单 {} 自动分车成功！", audit.getApplicationId());
-                } else {
-                    log.warn("⚠️ 申请单 {} 指定时间段无空车，流转至人工调度。", audit.getApplicationId());
-                }
+                // 触发分车调度
+                applicationService.autoDistribute(audit.getApplicationId());
             }
+            // =================================================================
 
-        } else if("40".equals(currentStatus)) {
-            // ----- 【驳回处理分支】 -----
-            log.info("申请单 {} 被驳回！终止后续审批流...", audit.getApplicationId());
-
-            // 找出并删除后续那些还没开始审的节点（状态为 20 的）
-            List<AuditVO> allAudits = auditMapper.selectAuditByApplicationId(audit.getApplicationId());
-            if(allAudits != null) {
-                for(AuditVO a : allAudits) {
-                    if("20".equals(String.valueOf(a.getAuditStatus()))) {
-                        auditMapper.deleteById(a.getId());
+        } else if(audit.getAuditStatus().equals(AuditStatusEnum.REJECT.getCode())){ // 40 驳回处理
+            AuditQuery auditQuery = new AuditQuery();
+            auditQuery.setApplicationId(audit.getApplicationId());
+            List<AuditVO> auditVOList = auditMapper.selectAudit(auditQuery);
+            if(auditVOList != null && auditVOList.size() > 0){
+                for(int i = 0;i < auditVOList.size();i++){
+                    AuditVO auditVO = auditVOList.get(i);
+                    // 删掉排在后面还没轮到审批的领导记录
+                    if(auditVO.getAuditStatus().equals(AuditStatusEnum.PENDING.getCode())){
+                        auditMapper.deleteById(auditVO.getId());
                     }
                 }
             }
-
-            // 将主申请单状态直接改为“驳回(40)”
-            application.setStatus("40");
+            application.setStatus(ApplicationStatusEnum.REJECT.getCode());
             application.setRejectReason(auditSaveParam.getRejectReason());
             applicationMapper.update(application);
         }
-        log.debug("====== 审批流转处理结束 ======");
     }
 
     private void assignAuditUserList(AuditVO auditVO) {
         List<String> auditUsernameList = new ArrayList<>();
         List<Long> auditUserIdList = new ArrayList<>();
         List<AuditVO> auditVOList = auditMapper.selectAuditByApplicationId(auditVO.getApplicationId());
-
-        for(int i = 0; i < auditVOList.size(); i++){
+        for(int i = 0;i <auditVOList.size();i++){
             Long userId = auditVOList.get(i).getAuditUserId();
             auditUserIdList.add(userId);
             UserVO user = userMapper.selectById(userId);
-            if (user != null) {
+            if(user != null) {
                 auditUsernameList.add(user.getUsername());
             }
         }
