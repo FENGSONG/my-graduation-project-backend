@@ -1,6 +1,7 @@
 package com.xfs.user.controller;
 
 import com.xfs.base.response.JsonResult;
+import com.xfs.base.auth.AuthGuard;
 import com.xfs.user.pojo.dto.UserLoginParam;
 import com.xfs.user.pojo.dto.UserQuery;
 import com.xfs.user.pojo.dto.UserSaveParam;
@@ -23,6 +24,8 @@ import java.util.List;
 public class UserController {
     @Autowired
     UserService userService;//多态
+    @Autowired
+    AuthGuard authGuard;
 
     @Operation(summary = "用户登录")
     @ApiOperationSupport(order = 10)
@@ -39,6 +42,7 @@ public class UserController {
     @GetMapping("select")
     public JsonResult selectUser(UserQuery userQuery){
         log.debug("查询用户:userQuery={}",userQuery);
+        authGuard.requireDispatcher();
         List<UserVO> list = userService.selectUser(userQuery);
         return JsonResult.ok(list);
     }
@@ -48,6 +52,7 @@ public class UserController {
     @PostMapping("save")
     public JsonResult saveUser(@Validated UserSaveParam userSaveParam){
         log.debug("保存用户:userSaveParam={}",userSaveParam);
+        authGuard.requireDispatcher();
         userService.saveUser(userSaveParam);
         return JsonResult.ok();
     }
@@ -57,6 +62,7 @@ public class UserController {
     @PostMapping("update/password/{userId}")
     public JsonResult resetPassword(@PathVariable Long userId){
         log.debug("重置密码:userId={}",userId);
+        authGuard.requireDispatcher();
         userService.resetPassword(userId);
         return JsonResult.ok();
     }
@@ -67,6 +73,7 @@ public class UserController {
     public JsonResult updateStatus(
             @PathVariable Long userId,@PathVariable String status){
         log.debug("修改状态:userId={},status={}",userId,status);
+        authGuard.requireDispatcher();
         userService.updateStatus(userId,status);
         return JsonResult.ok();
     }
@@ -76,6 +83,7 @@ public class UserController {
     @PostMapping("delete/{userId}")
     public JsonResult deleteUser(@PathVariable Long userId){
         log.debug("删除用户:userId={}",userId);
+        authGuard.requireDispatcher();
         userService.deleteUser(userId);
         return JsonResult.ok();
     }
@@ -85,6 +93,7 @@ public class UserController {
     @GetMapping("select/audit/{parentId}")
     public JsonResult selectAuditList(@PathVariable Long parentId){
         log.debug("查询审批人列表:parentId={}",parentId);
+        authGuard.requireLoginUser();
         List<UserVO> list = userService.selectAuditUserList(parentId);
         return JsonResult.ok(list);
     }

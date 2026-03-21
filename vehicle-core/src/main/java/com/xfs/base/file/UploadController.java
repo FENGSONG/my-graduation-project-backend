@@ -1,10 +1,12 @@
 package com.xfs.base.file;
 
 import com.xfs.base.response.JsonResult;
+import com.xfs.base.auth.AuthGuard;
 import com.github.xiaoymin.knife4j.annotations.ApiOperationSupport;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,11 +23,14 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/file")
 public class UploadController {
+    @Autowired
+    private AuthGuard authGuard;
 
     @Operation(summary = "图片上传功能")
     @ApiOperationSupport(order = 10)
     @PostMapping("upload")
     public JsonResult upload(MultipartFile file) throws IOException {
+        authGuard.requireLoginUser();
         log.debug("图片上传参数:{}",file);
         //1.获取原始文件名
         String fileName = file.getOriginalFilename();
@@ -56,6 +61,7 @@ public class UploadController {
     @ApiOperationSupport(order = 20)
     @PostMapping("remove")
     public JsonResult remove(String imgUrl){
+        authGuard.requireLoginUser();
         log.debug("图片删除参数:{}",imgUrl);
         new File("d:/files"+imgUrl).delete();
         return JsonResult.ok();

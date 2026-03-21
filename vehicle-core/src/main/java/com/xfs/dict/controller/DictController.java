@@ -1,6 +1,7 @@
 package com.xfs.dict.controller;
 
 import com.xfs.base.response.JsonResult;
+import com.xfs.base.auth.AuthGuard;
 import com.xfs.dict.pojo.dto.DictQuery;
 import com.xfs.dict.pojo.dto.DictSaveParam;
 import com.xfs.dict.pojo.vo.DictVO;
@@ -22,6 +23,8 @@ import java.util.List;
 public class DictController {
     @Autowired
     DictService dictService;
+    @Autowired
+    AuthGuard authGuard;
 
 
     @Operation(summary = "查询字典列表")
@@ -29,6 +32,7 @@ public class DictController {
     @GetMapping("/select")
     public JsonResult selectDict(DictQuery dictQuery){
         log.debug("查询字典:dictQuery={}",dictQuery);
+        authGuard.requireLoginUser();
         List<DictVO> list = dictService.selectDict(dictQuery);
         return JsonResult.ok(list);
     }
@@ -38,6 +42,7 @@ public class DictController {
     @PostMapping("/save")
     public JsonResult saveDict(@Validated DictSaveParam dictSaveParam){
         log.debug("保存字典:dictSaveParam={}",dictSaveParam);
+        authGuard.requireDispatcher();
         dictService.saveDict(dictSaveParam);
         return JsonResult.ok();
     }
@@ -47,6 +52,7 @@ public class DictController {
     @PostMapping("/delete/{id}")
     public JsonResult deleteDict(@PathVariable Long id){
         log.debug("删除字典:id={}",id);
+        authGuard.requireDispatcher();
         dictService.deleteDict(id);
         return JsonResult.ok();
     }

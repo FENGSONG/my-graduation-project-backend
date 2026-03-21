@@ -5,6 +5,7 @@ import com.xfs.base.response.JsonResult;
 import com.xfs.application.pojo.dto.ApplicationSaveParam;
 import com.xfs.application.pojo.vo.ApplicationVO;
 import com.xfs.application.service.ApplicationService;
+import com.xfs.base.auth.AuthGuard;
 import com.github.xiaoymin.knife4j.annotations.ApiOperationSupport;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +24,8 @@ public class ApplicationController {
 
     @Autowired
     ApplicationService applicationService;
+    @Autowired
+    AuthGuard authGuard;
 
     @Operation(summary = "新增申请")
     @ApiOperationSupport(order = 10)
@@ -57,6 +60,7 @@ public class ApplicationController {
     @PostMapping("distribute/{applicationId}/{vehicleId}")
     public JsonResult distribute(@PathVariable Long applicationId, @PathVariable Long vehicleId){
         log.debug("分配车辆参数:申请单编号:{},车辆编号:{}",applicationId,vehicleId);
+        authGuard.requireDispatcher();
         applicationService.distribute(applicationId,vehicleId);
         return JsonResult.ok();
     }
@@ -67,6 +71,7 @@ public class ApplicationController {
     @PostMapping("autoDistribute/{applicationId}")
     public JsonResult autoDistribute(@PathVariable Long applicationId){
         log.debug("触发自动分配车辆机制，申请单编号:{}", applicationId);
+        authGuard.requireDispatcher();
         // 调用 Service 层的自动分配逻辑，返回 true 表示成功，false 表示无车
         boolean isSuccess = applicationService.autoDistribute(applicationId);
 

@@ -1,6 +1,7 @@
 package com.xfs.dictoption.controller;
 
 import com.xfs.base.response.JsonResult;
+import com.xfs.base.auth.AuthGuard;
 import com.xfs.dictoption.pojo.dto.DictOptionQuery;
 import com.xfs.dictoption.pojo.dto.DictOptionSaveParam;
 import com.xfs.dictoption.pojo.vo.DictOptionVO;
@@ -22,12 +23,15 @@ import java.util.List;
 public class DictOptionController {
     @Autowired
     DictOptionService dictOptionService;
+    @Autowired
+    AuthGuard authGuard;
 
     @Operation(summary = "查询字典项列表")
     @ApiOperationSupport(order = 10)
     @GetMapping("/select")
     public JsonResult selectDictOption(DictOptionQuery dictOptionQuery){
         log.debug("字典项列表参数:{}",dictOptionQuery);
+        authGuard.requireLoginUser();
         List<DictOptionVO> list = dictOptionService.selectDictOption(dictOptionQuery);
         return JsonResult.ok(list);
     }
@@ -37,6 +41,7 @@ public class DictOptionController {
     @PostMapping("/save")
     public JsonResult saveDictOption(@Validated DictOptionSaveParam dictOptionSaveParam){
         log.debug("字典项保存参数:{}",dictOptionSaveParam);
+        authGuard.requireDispatcher();
         dictOptionService.saveDictOption(dictOptionSaveParam);
         return JsonResult.ok();
     }
@@ -46,6 +51,7 @@ public class DictOptionController {
     @PostMapping("/delete/{id}")
     public JsonResult deleteDictOption(@PathVariable Long id){
         log.debug("字典项删除参数:{}",id);
+        authGuard.requireDispatcher();
         dictOptionService.deleteDictOption(id);
         return JsonResult.ok();
     }
@@ -56,6 +62,7 @@ public class DictOptionController {
     @GetMapping("select/{code}")
     public JsonResult selectDictOptionByCode(@PathVariable String code){
         log.debug("根据字典code查询其下所有字典项参数:{}",code);
+        authGuard.requireLoginUser();
         List<DictOptionVO> list = dictOptionService.selectDictOptionByCode(code);
         return JsonResult.ok(list);
     }
