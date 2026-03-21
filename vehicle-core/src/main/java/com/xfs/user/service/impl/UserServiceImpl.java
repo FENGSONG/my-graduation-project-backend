@@ -2,6 +2,7 @@ package com.xfs.user.service.impl;
 
 import com.xfs.base.exception.ServiceException;
 import com.xfs.base.response.StatusCode;
+import com.xfs.base.util.AuthTokenUtil;
 import com.xfs.base.util.PasswordUtil;
 import com.xfs.user.mapper.UserMapper;
 import com.xfs.user.pojo.dto.UserLoginParam;
@@ -37,6 +38,7 @@ public class UserServiceImpl implements UserService {
         if(!userVO.getPassword().equals(userLoginParam.getPassword())){
             throw new ServiceException(StatusCode.PASSWORD_ERROR);
         }
+        userVO.setToken(AuthTokenUtil.generateToken(userVO.getId()));
         log.debug("用户查询结果:userVO={}",userVO);
         return userVO;
     }

@@ -71,6 +71,14 @@
         WHERE id = #{id}
     </update>
 
+    <update id="updateIfUserAndStatus">
+        update audit
+        set audit_status = #{targetStatus}, update_time = #{updateTime}
+        where id = #{id}
+          and audit_user_id = #{auditUserId}
+          and audit_status = #{expectStatus}
+    </update>
+
     <select id="selectRestAuditCount" resultType="Integer">
         SELECT COUNT(*) FROM audit
         WHERE application_id = #{applicationId} AND audit_status != 30

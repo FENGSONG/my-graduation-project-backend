@@ -61,6 +61,45 @@
         where id=#{id}
     </update>
 
+    <update id="updateIfStatus">
+        update application
+        <set>
+            <if test="application.status !=null and application.status !=''">
+                status = #{application.status},
+            </if>
+            <if test="application.updateTime !=null">
+                update_time = #{application.updateTime},
+            </if>
+            <if test="application.rejectReason!=null and application.rejectReason!=''">
+                reject_reason = #{application.rejectReason},
+            </if>
+            <if test="application.vehicleId !=null">
+                vehicle_id = #{application.vehicleId}
+            </if>
+        </set>
+        where id=#{application.id} and status=#{expectStatus}
+    </update>
+
+    <update id="backIfStatus">
+        update application
+        <set>
+            <if test="application.status !=null and application.status !=''">
+                status = #{application.status},
+            </if>
+            <if test="application.updateTime !=null">
+                update_time = #{application.updateTime},
+            </if>
+            vehicle_id = null
+        </set>
+        where id=#{application.id} and status=#{expectStatus}
+    </update>
+
+    <update id="cancelIfPendingAndUser">
+        update application
+        set status='20', update_time=#{updateTime}
+        where id=#{id} and user_id=#{userId} and status='10'
+    </update>
+
     <select id="selectById" resultType="com.xfs.application.pojo.entity.Application">
         SELECT * FROM application WHERE id = #{id}
     </select>

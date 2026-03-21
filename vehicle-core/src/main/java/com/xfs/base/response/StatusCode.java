@@ -16,7 +16,10 @@ public enum StatusCode {
     PASSWORD_ERROR(3004, "用户名或密码错误"),
     USERNAME_ERROR(3005, "用户名或密码错误"),
     LICENSE_EXISTS(3006, "车牌号已存在"),
-    VEHICLE_EXISTS(3007, "该围栏上存在未移除车辆");
+    VEHICLE_EXISTS(3007, "该围栏上存在未移除车辆"),
+    UNAUTHORIZED(3008, "登录状态无效"),
+    FORBIDDEN(3009, "无权限操作该数据"),
+    ILLEGAL_STATUS(3010, "当前状态不允许该操作");
 
     //状态码、状态码描述
     private Integer code;

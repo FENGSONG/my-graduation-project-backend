@@ -11,10 +11,12 @@ import com.xfs.audit.pojo.vo.AuditVO;
 import com.xfs.audit.service.AuditService;
 import com.xfs.base.enums.ApplicationStatusEnum;
 import com.xfs.base.enums.AuditStatusEnum;
+import com.xfs.base.exception.ServiceException;
+import com.xfs.base.response.StatusCode;
+import com.xfs.base.util.AuthTokenUtil;
 import com.xfs.user.mapper.UserMapper;
 import com.xfs.user.pojo.vo.UserVO;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -78,73 +80,118 @@ public class AuditServiceImpl implements AuditService {
     @Override
     public void updateAudit(AuditSaveParam auditSaveParam) {
         log.debug("审批申请单业务:auditSaveParam={}",auditSaveParam);
-        Audit audit = new Audit();
-        BeanUtils.copyProperties(auditSaveParam, audit);
-        audit.setUpdateTime(new Date());
-        // 1. 先将当前操作人(例如 moly)的记录更新为已通过(30)
-        auditMapper.update(audit);
+        Long loginUserId = AuthTokenUtil.getCurrentUserId();
+        if (auditSaveParam.getId() == null || auditSaveParam.getId() <= 0) {
+            throw new ServiceException(StatusCode.VALIDATE_ERROR);
+        }
 
+        String targetStatus = auditSaveParam.getAuditStatus();
+        boolean pass = AuditStatusEnum.AUDITED.getCode().equals(targetStatus);
+        boolean reject = AuditStatusEnum.REJECT.getCode().equals(targetStatus);
+        if (!pass && !reject) {
+            throw new ServiceException(StatusCode.VALIDATE_ERROR);
+        }
+
+        AuditQuery currentQuery = new AuditQuery();
+        currentQuery.setId(auditSaveParam.getId());
+        List<AuditVO> currentList = auditMapper.selectAudit(currentQuery);
+        if (currentList == null || currentList.isEmpty()) {
+            throw new ServiceException(StatusCode.DATA_UNEXISTS);
+        }
+        AuditVO currentAudit = currentList.get(0);
+        if (auditSaveParam.getApplicationId() != null
+                && !auditSaveParam.getApplicationId().equals(currentAudit.getApplicationId())) {
+            throw new ServiceException(StatusCode.FORBIDDEN);
+        }
+        if (!loginUserId.equals(currentAudit.getAuditUserId())) {
+            throw new ServiceException(StatusCode.FORBIDDEN);
+        }
+        if (!AuditStatusEnum.MY_PENDING.getCode().equals(currentAudit.getAuditStatus())) {
+            throw new ServiceException(StatusCode.ILLEGAL_STATUS);
+        }
+
+        int currentRows = auditMapper.updateIfUserAndStatus(
+                currentAudit.getId(),
+                loginUserId,
+                AuditStatusEnum.MY_PENDING.getCode(),
+                targetStatus,
+                new Date()
+        );
+        if (currentRows != 1) {
+            throw new ServiceException(StatusCode.ILLEGAL_STATUS);
+        }
+
+        Long applicationId = currentAudit.getApplicationId();
         Application application = new Application();
-        application.setId(audit.getApplicationId());
+        application.setId(applicationId);
         application.setUpdateTime(new Date());
 
-        if(audit.getAuditStatus().equals(AuditStatusEnum.AUDITED.getCode())){ // 30 审核通过处理
-
-            // ================== 核心修复：精准寻找下一位审批人 ==================
+        if (pass) { // 30 审核通过处理
             AuditQuery query = new AuditQuery();
-            query.setApplicationId(audit.getApplicationId());
-            // 把该单据所有的审批流（moly, tom, shaoyun）一口气全查出来
+            query.setApplicationId(applicationId);
             List<AuditVO> allAudits = auditMapper.selectAudit(query);
 
             AuditVO nextAudit = null;
-            // 遍历寻找状态仍然是 "20" (待他人审核) 并且排序最靠前的那个人
             for (AuditVO vo : allAudits) {
                 if (AuditStatusEnum.PENDING.getCode().equals(vo.getAuditStatus())) {
                     if (nextAudit == null || vo.getAuditSort() < nextAudit.getAuditSort()) {
-                        nextAudit = vo; // 精准锁定 tom
+                        nextAudit = vo;
                     }
                 }
             }
 
             if (nextAudit != null) {
-                // 找到了下一个人（tom），把他的状态改成 "10" (待我审核)，从而在他的列表里显现
-                log.info("流转成功！即将激活下一位审批人: 用户ID={}, 排序={}", nextAudit.getAuditUserId(), nextAudit.getAuditSort());
-                Audit audit2 = new Audit();
-                audit2.setId(nextAudit.getId());
-                audit2.setAuditStatus(AuditStatusEnum.MY_PENDING.getCode()); // 10
-                audit2.setUpdateTime(new Date());
-                auditMapper.update(audit2);
+                int nextRows = auditMapper.updateIfUserAndStatus(
+                        nextAudit.getId(),
+                        nextAudit.getAuditUserId(),
+                        AuditStatusEnum.PENDING.getCode(),
+                        AuditStatusEnum.MY_PENDING.getCode(),
+                        new Date()
+                );
+                if (nextRows == 1) {
+                    log.info("流转成功！即将激活下一位审批人: 用户ID={}, 排序={}", nextAudit.getAuditUserId(), nextAudit.getAuditSort());
+                }
 
-                // 申请单仍保持审核中
                 application.setStatus(ApplicationStatusEnum.AUDIT.getCode());
-                applicationMapper.update(application);
+                int appRows = applicationMapper.updateIfStatus(application, ApplicationStatusEnum.PENDING.getCode());
+                if (appRows == 0) {
+                    applicationMapper.updateIfStatus(application, ApplicationStatusEnum.AUDIT.getCode());
+                }
             } else {
-                // 如果没有状态为 20 的人了，说明最后一位大领导(shaoyun)也批完了！
-                log.info("所有领导审批完毕！申请单 {} 正式通过", audit.getApplicationId());
+                log.info("所有领导审批完毕！申请单 {} 正式通过", applicationId);
                 application.setStatus(ApplicationStatusEnum.AUDITED.getCode());
-                applicationMapper.update(application);
+                int appRows = applicationMapper.updateIfStatus(application, ApplicationStatusEnum.PENDING.getCode());
+                if (appRows == 0) {
+                    appRows = applicationMapper.updateIfStatus(application, ApplicationStatusEnum.AUDIT.getCode());
+                }
+                if (appRows == 0) {
+                    throw new ServiceException(StatusCode.ILLEGAL_STATUS);
+                }
 
-                // 触发分车调度
-                applicationService.autoDistribute(audit.getApplicationId());
+                // 只有最终通过后才允许分配车辆
+                applicationService.autoDistribute(applicationId);
             }
-            // =================================================================
-
-        } else if(audit.getAuditStatus().equals(AuditStatusEnum.REJECT.getCode())){ // 40 驳回处理
+        } else { // 40 驳回处理
             AuditQuery auditQuery = new AuditQuery();
-            auditQuery.setApplicationId(audit.getApplicationId());
+            auditQuery.setApplicationId(applicationId);
             List<AuditVO> auditVOList = auditMapper.selectAudit(auditQuery);
-            if(auditVOList != null && auditVOList.size() > 0){
-                for(int i = 0;i < auditVOList.size();i++){
-                    AuditVO auditVO = auditVOList.get(i);
+            if(auditVOList != null && !auditVOList.isEmpty()){
+                for (AuditVO auditVO : auditVOList) {
                     // 删掉排在后面还没轮到审批的领导记录
-                    if(auditVO.getAuditStatus().equals(AuditStatusEnum.PENDING.getCode())){
+                    if(AuditStatusEnum.PENDING.getCode().equals(auditVO.getAuditStatus())){
                         auditMapper.deleteById(auditVO.getId());
                     }
                 }
             }
             application.setStatus(ApplicationStatusEnum.REJECT.getCode());
             application.setRejectReason(auditSaveParam.getRejectReason());
-            applicationMapper.update(application);
+            int appRows = applicationMapper.updateIfStatus(application, ApplicationStatusEnum.PENDING.getCode());
+            if (appRows == 0) {
+                appRows = applicationMapper.updateIfStatus(application, ApplicationStatusEnum.AUDIT.getCode());
+            }
+            if (appRows == 0) {
+                throw new ServiceException(StatusCode.ILLEGAL_STATUS);
+            }
         }
     }
 

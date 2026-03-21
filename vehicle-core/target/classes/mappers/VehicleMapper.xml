@@ -57,6 +57,12 @@
         WHERE id=#{id}
     </update>
 
+    <update id="updateStatusIfMatch">
+        update vehicle
+        set status=#{toStatus}, update_time=#{updateTime}
+        where id=#{id} and status=#{fromStatus}
+    </update>
+
     <select id="selectVehicleByLincense" resultType="com.xfs.vehicle.pojo.vo.VehicleVO">
         SELECT
             id,brand,license,model,code,displacement,status,type,
