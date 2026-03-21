@@ -14,6 +14,7 @@ import com.xfs.base.exception.ServiceException;
 import com.xfs.base.response.StatusCode;
 import com.xfs.base.util.AuthTokenUtil;
 import com.xfs.user.mapper.UserMapper;
+import com.xfs.user.pojo.dto.UserQuery;
 import com.xfs.user.pojo.vo.UserVO;
 import com.xfs.vehicle.mapper.VehicleMapper;
 import com.xfs.vehicle.pojo.vo.VehicleVO;
@@ -25,7 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.StringJoiner;
 
 @Transactional
@@ -65,33 +68,9 @@ public class ApplicationServiceImpl implements ApplicationService {
         application.setStatus(ApplicationStatusEnum.PENDING.getCode());
         application.setCreateTime(new Date());
 
-        // ================== 核心修复：防空指针 + 全自动动态找领导 ==================
-        List<Long> dynamicAuditUserIds = new ArrayList<>(); // 实例化集合，确保绝对不为 null
-        // 1. 尝试根据当前申请人，动态向上找直属领导
-        if (loginUser.getParentId() != null) {
-            Long parentId = loginUser.getParentId();
-            int maxDepth = 5; // 防护机制：最多向上找 5 级领导，防止数据脏乱导致死循环
-
-            while (parentId != null && parentId != 0 && maxDepth > 0) {
-                dynamicAuditUserIds.add(parentId); // 将找到的领导 ID 加入审批列表
-
-                // 继续查这位领导，看他是否还有上级
-                UserVO parentUser = userMapper.selectById(parentId);
-                parentId = (parentUser != null) ? parentUser.getParentId() : null;
-                maxDepth--;
-            }
-        }
-
-        // 2. 【安全兜底】：如果该员工没有上级，或者没查到数据，给一个默认审批人，坚决不传空集合！
-        if (dynamicAuditUserIds.isEmpty()) {
-            log.warn("未找到用户 {} 的直属领导，启用默认兜底审批人", loginUserId);
-            // 随便塞一个默认的审批人ID进去，假设 2 号用户是超级管理员或经理
-            dynamicAuditUserIds.add(2L);
-        }
-
-        // 将组装好的、绝对不可能为空的审批人列表放进 application 对象
+        // P2: 构建更稳健的审批链（防循环、过滤禁用账号、移除硬编码审批人）
+        List<Long> dynamicAuditUserIds = buildAuditChain(loginUserId, loginUser);
         application.setAuditUserIdList(dynamicAuditUserIds);
-        // ====================================================================
 
         /* 遇到的问题:新增申请单对应的审批单时,审批单数据没有此申请单id
         原因:执行insert方法的SQL时,并没有把刚刚生成的申请单id回填到application对象中
@@ -330,5 +309,55 @@ public class ApplicationServiceImpl implements ApplicationService {
 
     private boolean isDispatcher(UserVO user) {
         return user != null && "99".equals(String.valueOf(user.getLevel()));
+    }
+
+    private List<Long> buildAuditChain(Long loginUserId, UserVO loginUser) {
+        List<Long> chain = new ArrayList<>();
+        Set<Long> visited = new HashSet<>();
+        visited.add(loginUserId);
+
+        Long parentId = loginUser.getParentId();
+        int maxDepth = 8; // 防护机制：最多向上找 8 级，避免脏数据死循环
+        while (parentId != null && parentId > 0 && maxDepth > 0) {
+            if (!visited.add(parentId)) {
+                log.warn("检测到审批链循环引用，登录人:{}, parentId:{}", loginUserId, parentId);
+                break;
+            }
+            UserVO parentUser = userMapper.selectById(parentId);
+            if (parentUser == null) {
+                log.warn("审批链节点用户不存在，id:{}", parentId);
+                break;
+            }
+            if ("1".equals(parentUser.getStatus())) {
+                chain.add(parentId);
+            } else {
+                log.warn("审批链节点用户已禁用，自动跳过，id:{}", parentId);
+            }
+            parentId = parentUser.getParentId();
+            maxDepth--;
+        }
+
+        if (!chain.isEmpty()) {
+            return chain;
+        }
+
+        // 无直属审批链时，兜底到系统内启用中的调度员(99)
+        UserQuery userQuery = new UserQuery();
+        userQuery.setLevel("99");
+        userQuery.setStatus("1");
+        List<UserVO> dispatchers = userMapper.selectUser(userQuery);
+        if (dispatchers != null) {
+            for (UserVO dispatcher : dispatchers) {
+                if (dispatcher != null && dispatcher.getId() != null && !dispatcher.getId().equals(loginUserId)) {
+                    chain.add(dispatcher.getId());
+                    break;
+                }
+            }
+        }
+        if (chain.isEmpty()) {
+            log.error("未找到可用审批人，登录人:{}", loginUserId);
+            throw new ServiceException(StatusCode.OPERATION_FAILED);
+        }
+        return chain;
     }
 }

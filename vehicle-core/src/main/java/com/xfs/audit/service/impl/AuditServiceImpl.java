@@ -135,6 +135,12 @@ public class AuditServiceImpl implements AuditService {
         if (!pass && !reject) {
             throw new ServiceException(StatusCode.VALIDATE_ERROR);
         }
+        if (reject) {
+            String rejectReason = auditSaveParam.getRejectReason();
+            if (rejectReason == null || rejectReason.trim().isEmpty()) {
+                throw new ServiceException(StatusCode.VALIDATE_ERROR);
+            }
+        }
 
         AuditQuery currentQuery = new AuditQuery();
         currentQuery.setId(auditSaveParam.getId());
