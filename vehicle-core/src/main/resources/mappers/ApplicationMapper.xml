@@ -11,6 +11,9 @@
         vehicle_id,reject_reason,create_time,update_time
         FROM application
         <where>
+            <if test="userId != null">
+                AND user_id = #{userId}
+            </if>
             <if test="status!=null and status!=''">
                 AND status = #{status}
             </if>
@@ -24,6 +27,7 @@
                 AND username LIKE CONCAT('%',#{username},'%')
             </if>
         </where>
+        ORDER BY create_time DESC
     </select>
 
     <update id="update">

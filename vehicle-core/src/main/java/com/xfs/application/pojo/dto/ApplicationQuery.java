@@ -5,6 +5,8 @@ import lombok.Data;
 
 @Data
 public class ApplicationQuery {
+    @Schema(description = "申请人id")
+    private Long userId;
     @Schema(description = "出发地")
     private String departureAddr;
     @Schema(description = "目的地")

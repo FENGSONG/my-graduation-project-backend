@@ -106,6 +106,19 @@ public class ApplicationServiceImpl implements ApplicationService {
     @Override
     public List<ApplicationVO> selectApplication(ApplicationQuery applicationQuery) {
         log.debug("查询申请单列表业务参数：{}", applicationQuery);
+        Long loginUserId = AuthTokenUtil.getCurrentUserId();
+        UserVO loginUser = userMapper.selectById(loginUserId);
+        if (loginUser == null) {
+            throw new ServiceException(StatusCode.UNAUTHORIZED);
+        }
+        if (applicationQuery == null) {
+            applicationQuery = new ApplicationQuery();
+        }
+        // P1: 非调度员只能看自己的申请单，避免前端越权查询
+        if (!isDispatcher(loginUser)) {
+            applicationQuery.setUserId(loginUserId);
+        }
+
         List<ApplicationVO> list = applicationMapper.selectApplication(applicationQuery);
         //遍历得到每一个申请单VO,为其补全审批人数据
         for(int i = 0; i < list.size(); i++){
@@ -313,5 +326,9 @@ public class ApplicationServiceImpl implements ApplicationService {
         //为传入的申请单VO补全审批人id集合与审批人姓名字符串数据
         applicationVO.setAuditUserIdList(auditUserIdList);//[106,103]
         applicationVO.setAuditUsernameList(stringJoiner.toString());//moly,tom
+    }
+
+    private boolean isDispatcher(UserVO user) {
+        return user != null && "99".equals(String.valueOf(user.getLevel()));
     }
 }
