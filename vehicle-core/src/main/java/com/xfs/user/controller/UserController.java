@@ -3,6 +3,8 @@ package com.xfs.user.controller;
 import com.xfs.base.response.JsonResult;
 import com.xfs.base.auth.AuthGuard;
 import com.xfs.user.pojo.dto.UserLoginParam;
+import com.xfs.user.pojo.dto.UserPasswordChangeParam;
+import com.xfs.user.pojo.dto.UserProfileUpdateParam;
 import com.xfs.user.pojo.dto.UserQuery;
 import com.xfs.user.pojo.dto.UserSaveParam;
 import com.xfs.user.pojo.vo.UserVO;
@@ -96,6 +98,26 @@ public class UserController {
         authGuard.requireLoginUser();
         List<UserVO> list = userService.selectAuditUserList(parentId);
         return JsonResult.ok(list);
+    }
+
+    @Operation(summary = "个人资料自助修改")
+    @ApiOperationSupport(order = 80)
+    @PostMapping("save/self")
+    public JsonResult saveSelfProfile(@Validated UserProfileUpdateParam userProfileUpdateParam){
+        UserVO loginUser = authGuard.requireLoginUser();
+        log.debug("个人资料自助修改:userId={},param={}", loginUser.getId(), userProfileUpdateParam);
+        userService.updateSelfProfile(loginUser.getId(), userProfileUpdateParam);
+        return JsonResult.ok();
+    }
+
+    @Operation(summary = "用户自助修改密码")
+    @ApiOperationSupport(order = 90)
+    @PostMapping("update/password/self")
+    public JsonResult updateSelfPassword(@Validated UserPasswordChangeParam userPasswordChangeParam){
+        UserVO loginUser = authGuard.requireLoginUser();
+        log.debug("用户自助修改密码:userId={}", loginUser.getId());
+        userService.changeSelfPassword(loginUser.getId(), userPasswordChangeParam);
+        return JsonResult.ok();
     }
 
 

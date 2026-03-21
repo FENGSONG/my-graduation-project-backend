@@ -6,6 +6,8 @@ import com.xfs.base.util.AuthTokenUtil;
 import com.xfs.base.util.PasswordUtil;
 import com.xfs.user.mapper.UserMapper;
 import com.xfs.user.pojo.dto.UserLoginParam;
+import com.xfs.user.pojo.dto.UserPasswordChangeParam;
+import com.xfs.user.pojo.dto.UserProfileUpdateParam;
 import com.xfs.user.pojo.dto.UserQuery;
 import com.xfs.user.pojo.dto.UserSaveParam;
 import com.xfs.user.pojo.entity.User;
@@ -115,5 +117,44 @@ public class UserServiceImpl implements UserService {
         }
         //6.将准备好的审批人集合返回给上一层
         return userVOList;
+    }
+
+    @Override
+    public void updateSelfProfile(Long userId, UserProfileUpdateParam userProfileUpdateParam) {
+        log.debug("自助更新个人资料业务:userId={},param={}", userId, userProfileUpdateParam);
+        UserVO currentUser = userMapper.selectById(userId);
+        if (currentUser == null) {
+            throw new ServiceException(StatusCode.UNAUTHORIZED);
+        }
+
+        User user = new User();
+        user.setId(userId);
+        user.setPhone(userProfileUpdateParam.getPhone());
+        user.setEmail(userProfileUpdateParam.getEmail());
+        user.setAge(userProfileUpdateParam.getAge());
+        user.setGender(userProfileUpdateParam.getGender());
+        user.setUpdateTime(new Date());
+        userMapper.update(user);
+    }
+
+    @Override
+    public void changeSelfPassword(Long userId, UserPasswordChangeParam userPasswordChangeParam) {
+        log.debug("自助修改密码业务:userId={}", userId);
+        UserVO currentUser = userMapper.selectById(userId);
+        if (currentUser == null) {
+            throw new ServiceException(StatusCode.UNAUTHORIZED);
+        }
+        if (!String.valueOf(currentUser.getPassword()).equals(userPasswordChangeParam.getOldPassword())) {
+            throw new ServiceException(StatusCode.PASSWORD_ERROR);
+        }
+        if (userPasswordChangeParam.getOldPassword().equals(userPasswordChangeParam.getNewPassword())) {
+            throw new ServiceException(StatusCode.VALIDATE_ERROR);
+        }
+
+        User user = new User();
+        user.setId(userId);
+        user.setPassword(userPasswordChangeParam.getNewPassword());
+        user.setUpdateTime(new Date());
+        userMapper.update(user);
     }
 }
