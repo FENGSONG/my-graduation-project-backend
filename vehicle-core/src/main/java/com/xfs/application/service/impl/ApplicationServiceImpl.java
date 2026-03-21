@@ -242,6 +242,23 @@ public class ApplicationServiceImpl implements ApplicationService {
             return false;
         }
 
+        // 企业策略：优先按员工在大厅选择的“意向车辆”分配，失败再回退到自动找车
+        Long preferredVehicleId = application.getVehicleId();
+        if (preferredVehicleId != null && preferredVehicleId > 0) {
+            try {
+                this.distribute(applicationId, preferredVehicleId);
+                log.info("优先分配成功！申请单 {} 命中意向车辆ID: {}", applicationId, preferredVehicleId);
+                return true;
+            } catch (ServiceException ex) {
+                if (StatusCode.ILLEGAL_STATUS.equals(ex.getStatusCode())) {
+                    log.warn("意向车辆当前不可分配，申请单 {}，车辆ID {}，进入回退自动找车",
+                            applicationId, preferredVehicleId);
+                } else {
+                    throw ex;
+                }
+            }
+        }
+
         List<VehicleVO> availableVehicles = vehicleMapper.findAvailableVehicles(application.getStartTime(), application.getEndTime());
 
         if (availableVehicles == null || availableVehicles.isEmpty()) {
@@ -252,6 +269,10 @@ public class ApplicationServiceImpl implements ApplicationService {
         // 依次尝试分配，避免并发场景下第1辆车被瞬时占用导致整体失败
         for (VehicleVO selectedVehicle : availableVehicles) {
             if (selectedVehicle == null || selectedVehicle.getId() == null) {
+                continue;
+            }
+            // 已经尝试过意向车辆，回退列表里跳过避免重复尝试
+            if (preferredVehicleId != null && preferredVehicleId.equals(selectedVehicle.getId())) {
                 continue;
             }
             try {
