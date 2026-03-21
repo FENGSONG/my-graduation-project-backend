@@ -10,10 +10,12 @@ import com.xfs.audit.mapper.AuditMapper;
 import com.xfs.audit.pojo.vo.AuditVO;
 import com.xfs.audit.service.AuditService;
 import com.xfs.base.enums.ApplicationStatusEnum;
+import com.xfs.base.exception.ServiceException;
+import com.xfs.base.response.StatusCode;
+import com.xfs.base.util.AuthTokenUtil;
 import com.xfs.user.mapper.UserMapper;
 import com.xfs.user.pojo.vo.UserVO;
 import com.xfs.vehicle.mapper.VehicleMapper;
-import com.xfs.vehicle.pojo.entity.Vehicle;
 import com.xfs.vehicle.pojo.vo.VehicleVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -44,36 +46,45 @@ public class ApplicationServiceImpl implements ApplicationService {
     @Override
     public void save(ApplicationSaveParam applicationSaveParam) {
         log.debug("保存申请业务，参数：{}", applicationSaveParam);
+        Long loginUserId = AuthTokenUtil.getCurrentUserId();
+        UserVO loginUser = userMapper.selectById(loginUserId);
+        if (loginUser == null) {
+            throw new ServiceException(StatusCode.UNAUTHORIZED);
+        }
+
+        if (applicationSaveParam.getStartTime() == null || applicationSaveParam.getEndTime() == null
+                || !applicationSaveParam.getStartTime().before(applicationSaveParam.getEndTime())) {
+            throw new IllegalArgumentException("用车开始时间必须早于结束时间");
+        }
+
         Application application = new Application();
         BeanUtils.copyProperties(applicationSaveParam, application);
+        // 后端强制以登录人身份落库，不信任前端 userId/username
+        application.setUserId(loginUserId);
+        application.setUsername(loginUser.getUsername());
         application.setStatus(ApplicationStatusEnum.PENDING.getCode());
         application.setCreateTime(new Date());
 
         // ================== 核心修复：防空指针 + 全自动动态找领导 ==================
         List<Long> dynamicAuditUserIds = new ArrayList<>(); // 实例化集合，确保绝对不为 null
-        Long currentUserId = application.getUserId();
-
         // 1. 尝试根据当前申请人，动态向上找直属领导
-        if (currentUserId != null) {
-            UserVO currentUser = userMapper.selectById(currentUserId);
-            if (currentUser != null && currentUser.getParentId() != null) {
-                Long parentId = currentUser.getParentId();
-                int maxDepth = 5; // 防护机制：最多向上找 5 级领导，防止数据脏乱导致死循环
+        if (loginUser.getParentId() != null) {
+            Long parentId = loginUser.getParentId();
+            int maxDepth = 5; // 防护机制：最多向上找 5 级领导，防止数据脏乱导致死循环
 
-                while (parentId != null && parentId != 0 && maxDepth > 0) {
-                    dynamicAuditUserIds.add(parentId); // 将找到的领导 ID 加入审批列表
+            while (parentId != null && parentId != 0 && maxDepth > 0) {
+                dynamicAuditUserIds.add(parentId); // 将找到的领导 ID 加入审批列表
 
-                    // 继续查这位领导，看他是否还有上级
-                    UserVO parentUser = userMapper.selectById(parentId);
-                    parentId = (parentUser != null) ? parentUser.getParentId() : null;
-                    maxDepth--;
-                }
+                // 继续查这位领导，看他是否还有上级
+                UserVO parentUser = userMapper.selectById(parentId);
+                parentId = (parentUser != null) ? parentUser.getParentId() : null;
+                maxDepth--;
             }
         }
 
         // 2. 【安全兜底】：如果该员工没有上级，或者没查到数据，给一个默认审批人，坚决不传空集合！
         if (dynamicAuditUserIds.isEmpty()) {
-            log.warn("未找到用户 {} 的直属领导，启用默认兜底审批人", currentUserId);
+            log.warn("未找到用户 {} 的直属领导，启用默认兜底审批人", loginUserId);
             // 随便塞一个默认的审批人ID进去，假设 2 号用户是超级管理员或经理
             dynamicAuditUserIds.add(2L);
         }
@@ -108,11 +119,21 @@ public class ApplicationServiceImpl implements ApplicationService {
     @Override
     public void cancel(Long id) {
         log.debug("撤销申请业务参数:{}",id);
-        Application application = new Application();
-        application.setId(id);
-        application.setStatus(ApplicationStatusEnum.CANCEL.getCode());
-        application.setUpdateTime(new Date());
-        applicationMapper.update(application);
+        Long loginUserId = AuthTokenUtil.getCurrentUserId();
+        Application current = applicationMapper.selectById(id);
+        if (current == null) {
+            throw new ServiceException(StatusCode.DATA_UNEXISTS);
+        }
+        if (!loginUserId.equals(current.getUserId())) {
+            throw new ServiceException(StatusCode.FORBIDDEN);
+        }
+        if (!ApplicationStatusEnum.PENDING.getCode().equals(current.getStatus())) {
+            throw new ServiceException(StatusCode.ILLEGAL_STATUS);
+        }
+        int rows = applicationMapper.cancelIfPendingAndUser(id, loginUserId, new Date());
+        if (rows != 1) {
+            throw new ServiceException(StatusCode.ILLEGAL_STATUS);
+        }
 
         //还需要删除此申请单对应的所有审批单
         auditMapper.deleteByApplicationId(id);
@@ -121,37 +142,91 @@ public class ApplicationServiceImpl implements ApplicationService {
     @Override
     public void distribute(Long applicationId, Long vehicleId) {
         log.debug("分配车辆业务参数:申请单编号:{},车辆编号:{}",applicationId,vehicleId);
+        // 分配动作必须由已登录用户触发
+        AuthTokenUtil.getCurrentUserId();
+        if (vehicleId == null || vehicleId <= 0) {
+            throw new IllegalArgumentException("车辆编号不合法");
+        }
+
+        Application current = applicationMapper.selectById(applicationId);
+        if (current == null) {
+            throw new ServiceException(StatusCode.DATA_UNEXISTS);
+        }
+        if (!ApplicationStatusEnum.AUDITED.getCode().equals(current.getStatus())) {
+            throw new ServiceException(StatusCode.ILLEGAL_STATUS);
+        }
+
+        if (current.getStartTime() == null || current.getEndTime() == null) {
+            throw new IllegalArgumentException("申请单时间范围不存在");
+        }
+
+        // 必须是当前时间段内可排班车辆，防止绕开审批流直接占用
+        List<VehicleVO> availableVehicles = vehicleMapper.findAvailableVehicles(current.getStartTime(), current.getEndTime());
+        boolean canUse = false;
+        if (availableVehicles != null) {
+            for (VehicleVO item : availableVehicles) {
+                if (item != null && vehicleId.equals(item.getId())) {
+                    canUse = true;
+                    break;
+                }
+            }
+        }
+        if (!canUse) {
+            throw new ServiceException(StatusCode.ILLEGAL_STATUS);
+        }
+
         Application application = new Application();
         application.setId(applicationId);
         application.setVehicleId(vehicleId);
         application.setStatus(ApplicationStatusEnum.ALLOCATION.getCode());
         application.setUpdateTime(new Date());
-        applicationMapper.update(application);
+        int appRows = applicationMapper.updateIfStatus(application, ApplicationStatusEnum.AUDITED.getCode());
+        if (appRows != 1) {
+            throw new ServiceException(StatusCode.ILLEGAL_STATUS);
+        }
 
-        Vehicle vehicle = new Vehicle();
-        vehicle.setId(vehicleId);
-        vehicle.setStatus("2");//占用
-        vehicle.setUpdateTime(new Date());
-        vehicleMapper.update(vehicle);
+        int vehicleRows = vehicleMapper.updateStatusIfMatch(vehicleId, "1", "2", new Date());
+        if (vehicleRows != 1) {
+            throw new ServiceException(StatusCode.ILLEGAL_STATUS);
+        }
     }
 
     @Override
     public void back(Long applicationId, Long vehicleId) {
         log.debug("还车业务参数:申请单编号:{},车辆编号:{}",applicationId,vehicleId);
+        Long loginUserId = AuthTokenUtil.getCurrentUserId();
+
+        if (vehicleId == null || vehicleId <= 0) {
+            throw new IllegalArgumentException("车辆编号不合法");
+        }
+
+        Application current = applicationMapper.selectById(applicationId);
+        if (current == null) {
+            throw new ServiceException(StatusCode.DATA_UNEXISTS);
+        }
+        if (!loginUserId.equals(current.getUserId())) {
+            throw new ServiceException(StatusCode.FORBIDDEN);
+        }
+        if (!ApplicationStatusEnum.ALLOCATION.getCode().equals(current.getStatus())) {
+            throw new ServiceException(StatusCode.ILLEGAL_STATUS);
+        }
+        if (current.getVehicleId() == null || !vehicleId.equals(current.getVehicleId())) {
+            throw new ServiceException(StatusCode.ILLEGAL_STATUS);
+        }
+
         Application application = new Application();
         application.setId(applicationId);
-        application.setVehicleId(null);
         application.setStatus(ApplicationStatusEnum.END.getCode());
         application.setUpdateTime(new Date());
+        int appRows = applicationMapper.backIfStatus(application, ApplicationStatusEnum.ALLOCATION.getCode());
+        if (appRows != 1) {
+            throw new ServiceException(StatusCode.ILLEGAL_STATUS);
+        }
 
-        // 【已修改】：这里改用 applicationMapper.back，触发XML中把 vehicle_id 置空的特定逻辑
-        applicationMapper.back(application);
-
-        Vehicle vehicle = new Vehicle();
-        vehicle.setId(vehicleId);
-        vehicle.setStatus("1");//空闲
-        vehicle.setUpdateTime(new Date());
-        vehicleMapper.update(vehicle);
+        int vehicleRows = vehicleMapper.updateStatusIfMatch(vehicleId, "2", "1", new Date());
+        if (vehicleRows != 1) {
+            throw new ServiceException(StatusCode.ILLEGAL_STATUS);
+        }
     }
 
     // ================== 新增核心方法：自动调度分配 ==================
@@ -161,23 +236,50 @@ public class ApplicationServiceImpl implements ApplicationService {
 
         Application application = applicationMapper.selectById(applicationId);
 
-        if (application == null || application.getStartTime() == null || application.getEndTime() == null) {
-            log.error("申请单不存在或起止时间为空，无法进行时间段排期检测");
+        if (application == null) {
+            throw new ServiceException(StatusCode.DATA_UNEXISTS);
+        }
+
+        if (!ApplicationStatusEnum.AUDITED.getCode().equals(application.getStatus())) {
+            log.warn("申请单 {} 当前状态={}，不是已通过(50)，跳过自动分配", applicationId, application.getStatus());
+            return false;
+        }
+
+        if (application.getStartTime() == null || application.getEndTime() == null) {
+            log.error("申请单 {} 起止时间为空，无法进行时间段排期检测", applicationId);
             return false;
         }
 
         List<VehicleVO> availableVehicles = vehicleMapper.findAvailableVehicles(application.getStartTime(), application.getEndTime());
 
-        if (availableVehicles != null && !availableVehicles.isEmpty()) {
-            VehicleVO selectedVehicle = availableVehicles.get(0);
-            log.info("自动找车成功！为您分配车辆ID: {}, 车牌号: {}", selectedVehicle.getId(), selectedVehicle.getLicense());
-
-            this.distribute(applicationId, selectedVehicle.getId());
-            return true;
-        } else {
+        if (availableVehicles == null || availableVehicles.isEmpty()) {
             log.warn("申请单编号 {} 的指定时间段内暂无可用车辆，转入人工排队调度状态", applicationId);
             return false;
         }
+
+        // 依次尝试分配，避免并发场景下第1辆车被瞬时占用导致整体失败
+        for (VehicleVO selectedVehicle : availableVehicles) {
+            if (selectedVehicle == null || selectedVehicle.getId() == null) {
+                continue;
+            }
+            try {
+                this.distribute(applicationId, selectedVehicle.getId());
+                log.info("自动找车成功！为申请单 {} 分配车辆ID: {}, 车牌号: {}",
+                        applicationId, selectedVehicle.getId(), selectedVehicle.getLicense());
+                return true;
+            } catch (ServiceException ex) {
+                // 车辆被并发占用/申请状态被并发变更时，继续尝试下一辆
+                if (StatusCode.ILLEGAL_STATUS.equals(ex.getStatusCode())) {
+                    log.warn("自动分配车辆冲突，申请单 {} 车辆 {} 重试下一辆",
+                            applicationId, selectedVehicle.getId());
+                    continue;
+                }
+                throw ex;
+            }
+        }
+
+        log.warn("申请单编号 {} 所有候选车辆分配失败，转入人工排队调度状态", applicationId);
+        return false;
     }
     // ================================================================
 

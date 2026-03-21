@@ -18,6 +18,11 @@ public interface VehicleMapper {
 
     void update(Vehicle vehicle);
 
+    int updateStatusIfMatch(@Param("id") Long id,
+                            @Param("fromStatus") String fromStatus,
+                            @Param("toStatus") String toStatus,
+                            @Param("updateTime") Date updateTime);
+
     VehicleVO selectVehicleByLincense(String license);
 
     void deleteById(Long id);
