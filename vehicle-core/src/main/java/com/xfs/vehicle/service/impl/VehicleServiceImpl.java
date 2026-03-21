@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @Slf4j
@@ -46,7 +47,7 @@ public class VehicleServiceImpl implements VehicleService {
             vehicleMapper.insert(vehicle);
         }else{//更新
             //如果车牌号已存在,且当前传入的车牌号车辆id不是当前要更新的车辆id,说明即将要插入的车牌号重复
-            if(vehicleVO != null && vehicleVO.getId() != vehicle.getId()){
+            if(vehicleVO != null && !Objects.equals(vehicleVO.getId(), vehicle.getId())){
                 throw new ServiceException(StatusCode.LICENSE_EXISTS);
             }
             vehicle.setUpdateTime(new Date());

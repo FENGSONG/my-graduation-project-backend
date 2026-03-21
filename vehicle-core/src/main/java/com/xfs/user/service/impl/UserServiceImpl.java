@@ -38,6 +38,10 @@ public class UserServiceImpl implements UserService {
         if(!userVO.getPassword().equals(userLoginParam.getPassword())){
             throw new ServiceException(StatusCode.PASSWORD_ERROR);
         }
+        // P1: 禁用账号不可登录（通用状态：1=启用，0=禁用）
+        if (!"1".equals(String.valueOf(userVO.getStatus()))) {
+            throw new ServiceException(StatusCode.FORBIDDEN);
+        }
         userVO.setToken(AuthTokenUtil.generateToken(userVO.getId()));
         log.debug("用户查询结果:userVO={}",userVO);
         return userVO;
