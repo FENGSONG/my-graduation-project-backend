@@ -44,7 +44,7 @@ public class UserController {
     @GetMapping("select")
     public JsonResult selectUser(UserQuery userQuery){
         log.debug("查询用户:userQuery={}",userQuery);
-        authGuard.requireDispatcher();
+        authGuard.requireMenuPerm("user:manage");
         List<UserVO> list = userService.selectUser(userQuery);
         return JsonResult.ok(list);
     }
@@ -54,7 +54,7 @@ public class UserController {
     @PostMapping("save")
     public JsonResult saveUser(@Validated UserSaveParam userSaveParam){
         log.debug("保存用户:userSaveParam={}",userSaveParam);
-        authGuard.requireDispatcher();
+        authGuard.requireMenuPerm("user:manage");
         userService.saveUser(userSaveParam);
         return JsonResult.ok();
     }
@@ -64,7 +64,7 @@ public class UserController {
     @PostMapping("update/password/{userId}")
     public JsonResult resetPassword(@PathVariable Long userId){
         log.debug("重置密码:userId={}",userId);
-        authGuard.requireDispatcher();
+        authGuard.requireMenuPerm("user:manage");
         userService.resetPassword(userId);
         return JsonResult.ok();
     }
@@ -75,7 +75,7 @@ public class UserController {
     public JsonResult updateStatus(
             @PathVariable Long userId,@PathVariable String status){
         log.debug("修改状态:userId={},status={}",userId,status);
-        authGuard.requireDispatcher();
+        authGuard.requireMenuPerm("user:manage");
         userService.updateStatus(userId,status);
         return JsonResult.ok();
     }
@@ -85,7 +85,7 @@ public class UserController {
     @PostMapping("delete/{userId}")
     public JsonResult deleteUser(@PathVariable Long userId){
         log.debug("删除用户:userId={}",userId);
-        authGuard.requireDispatcher();
+        authGuard.requireMenuPerm("user:manage");
         userService.deleteUser(userId);
         return JsonResult.ok();
     }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 
 import java.util.Date;
+import java.util.List;
 
 @Data
 public class UserVO {
@@ -22,4 +23,14 @@ public class UserVO {
     private String status;
     private String level;
     private Long parentId;
+    private Long orgId;
+    private String orgName;
+    private String roleCode;
+    private String roleName;
+    private Long enterpriseId;
+    private Long companyId;
+    private Long deptId;
+    private String dataScope;
+    private String menuPerms;
+    private List<String> menuPermList;
 }

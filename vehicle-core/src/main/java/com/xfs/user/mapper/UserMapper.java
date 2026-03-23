@@ -11,6 +11,8 @@ import java.util.List;
 * 可以让spring框架自动管理此类对象,还能进行事务管理等服务 */
 @Repository
 public interface UserMapper {
+    UserVO selectByAccount(String account);
+
     UserVO selectByUsername(String username);
 
     List<UserVO> selectUser(UserQuery userQuery);

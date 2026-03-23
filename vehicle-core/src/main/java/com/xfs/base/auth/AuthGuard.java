@@ -29,5 +29,30 @@ public class AuthGuard {
         }
         return loginUser;
     }
-}
 
+    public UserVO requireMenuPerm(String permCode) {
+        UserVO loginUser = requireLoginUser();
+        if (loginUser == null) {
+            throw new ServiceException(StatusCode.UNAUTHORIZED);
+        }
+        // 兼容超级调度员
+        if ("99".equals(String.valueOf(loginUser.getLevel()))) {
+            return loginUser;
+        }
+        String perms = String.valueOf(loginUser.getMenuPerms() == null ? "" : loginUser.getMenuPerms()).trim();
+        if (perms.isEmpty()) {
+            throw new ServiceException(StatusCode.FORBIDDEN);
+        }
+        String[] permArray = perms.split(",");
+        for (String item : permArray) {
+            String normalized = String.valueOf(item == null ? "" : item).trim();
+            if (normalized.isEmpty()) {
+                continue;
+            }
+            if ("*".equals(normalized) || normalized.equals(permCode)) {
+                return loginUser;
+            }
+        }
+        throw new ServiceException(StatusCode.FORBIDDEN);
+    }
+}

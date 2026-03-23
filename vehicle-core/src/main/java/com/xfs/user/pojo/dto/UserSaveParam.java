@@ -33,6 +33,10 @@ public class UserSaveParam {
     @Schema(description = "直属领导id")
     @NotNull(message = "直属领导id不能为空")
     private Long parentId;
+    @Schema(description = "组织ID（总部/子公司/部门）")
+    private Long orgId;
+    @Schema(description = "角色编码")
+    private String roleCode;
     @Schema(description = "性别")
     @NotBlank(message = "性别不能为空")
     private String gender;

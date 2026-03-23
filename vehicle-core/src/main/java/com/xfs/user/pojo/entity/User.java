@@ -18,4 +18,9 @@ public class User {
     private String status;
     private String level;
     private Long parentId;
+    private Long orgId;
+    private String roleCode;
+    private Long enterpriseId;
+    private Long companyId;
+    private Long deptId;
 }
