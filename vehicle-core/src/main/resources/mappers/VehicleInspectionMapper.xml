@@ -1,0 +1,74 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfs.vehicleinspection.mapper.VehicleInspectionMapper">
+
+    <select id="selectVehicleInspection" resultType="com.xfs.vehicleinspection.pojo.vo.VehicleInspectionVO">
+        SELECT
+            id, cert_no, valid_until, inspect_year, inspect_time, inspect_item,
+            fee, location, vehicle_id, inspector, sender, status,
+            remark, create_time, update_time
+        FROM vehicle_inspection
+        <where>
+            <if test="id != null">
+                AND id = #{id}
+            </if>
+            <if test="vehicleId != null">
+                AND vehicle_id = #{vehicleId}
+            </if>
+            <if test="certNo != null and certNo != ''">
+                AND cert_no LIKE CONCAT('%', #{certNo}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY inspect_time DESC
+    </select>
+
+    <select id="selectByCertNo" resultType="com.xfs.vehicleinspection.pojo.vo.VehicleInspectionVO">
+        SELECT
+            id, cert_no, valid_until, inspect_year, inspect_time, inspect_item,
+            fee, location, vehicle_id, inspector, sender, status,
+            remark, create_time, update_time
+        FROM vehicle_inspection
+        WHERE cert_no = #{certNo}
+        LIMIT 1
+    </select>
+
+    <insert id="insert">
+        INSERT INTO vehicle_inspection(
+            cert_no, valid_until, inspect_year, inspect_time, inspect_item,
+            fee, location, vehicle_id, inspector, sender, status,
+            remark, create_time
+        ) VALUES (
+            #{certNo}, #{validUntil}, #{inspectYear}, #{inspectTime}, #{inspectItem},
+            #{fee}, #{location}, #{vehicleId}, #{inspector}, #{sender}, #{status},
+            #{remark}, #{createTime}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE vehicle_inspection
+        <set>
+            <if test="certNo != null and certNo != ''">cert_no = #{certNo},</if>
+            <if test="validUntil != null">valid_until = #{validUntil},</if>
+            <if test="inspectYear != null and inspectYear != ''">inspect_year = #{inspectYear},</if>
+            <if test="inspectTime != null">inspect_time = #{inspectTime},</if>
+            <if test="inspectItem != null and inspectItem != ''">inspect_item = #{inspectItem},</if>
+            <if test="fee != null">fee = #{fee},</if>
+            <if test="location != null and location != ''">location = #{location},</if>
+            <if test="vehicleId != null">vehicle_id = #{vehicleId},</if>
+            <if test="inspector != null and inspector != ''">inspector = #{inspector},</if>
+            <if test="sender != null">sender = #{sender},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updateTime != null">update_time = #{updateTime}</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM vehicle_inspection WHERE id = #{id}
+    </delete>
+
+</mapper>
