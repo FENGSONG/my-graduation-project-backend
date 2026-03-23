@@ -1,4 +1,4 @@
-﻿package com.xfs.vehiclerepair.pojo.vo;
+package com.xfs.vehiclerepair.pojo.vo;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;

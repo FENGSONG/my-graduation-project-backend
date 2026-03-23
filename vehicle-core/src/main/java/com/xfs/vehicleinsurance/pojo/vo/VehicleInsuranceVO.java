@@ -1,4 +1,4 @@
-﻿package com.xfs.vehicleinsurance.pojo.vo;
+package com.xfs.vehicleinsurance.pojo.vo;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;

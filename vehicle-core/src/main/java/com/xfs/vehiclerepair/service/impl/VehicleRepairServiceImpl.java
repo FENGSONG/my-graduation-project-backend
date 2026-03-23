@@ -1,4 +1,4 @@
-﻿package com.xfs.vehiclerepair.service.impl;
+package com.xfs.vehiclerepair.service.impl;
 
 import com.xfs.base.exception.ServiceException;
 import com.xfs.base.response.StatusCode;

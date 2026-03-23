@@ -1,4 +1,4 @@
-﻿package com.xfs.vehicleinspection.pojo.dto;
+package com.xfs.vehicleinspection.pojo.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;

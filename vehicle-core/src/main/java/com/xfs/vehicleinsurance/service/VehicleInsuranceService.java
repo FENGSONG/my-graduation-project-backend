@@ -1,4 +1,4 @@
-﻿package com.xfs.vehicleinsurance.service;
+package com.xfs.vehicleinsurance.service;
 
 import com.xfs.vehicleinsurance.pojo.dto.VehicleInsuranceQuery;
 import com.xfs.vehicleinsurance.pojo.dto.VehicleInsuranceSaveParam;

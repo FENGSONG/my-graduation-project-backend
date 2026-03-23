@@ -1,4 +1,4 @@
-﻿package com.xfs.vehicleinspection.controller;
+package com.xfs.vehicleinspection.controller;
 
 import com.github.xiaoymin.knife4j.annotations.ApiOperationSupport;
 import com.xfs.base.auth.AuthGuard;

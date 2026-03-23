@@ -1,4 +1,4 @@
-﻿package com.xfs.vehiclerepair.pojo.entity;
+package com.xfs.vehiclerepair.pojo.entity;
 
 import lombok.Data;
 

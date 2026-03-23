@@ -1,4 +1,4 @@
-﻿package com.xfs.vehicleinspection.pojo.entity;
+package com.xfs.vehicleinspection.pojo.entity;
 
 import lombok.Data;
 

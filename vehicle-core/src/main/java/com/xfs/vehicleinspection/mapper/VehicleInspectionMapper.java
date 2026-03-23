@@ -1,4 +1,4 @@
-﻿package com.xfs.vehicleinspection.mapper;
+package com.xfs.vehicleinspection.mapper;
 
 import com.xfs.vehicleinspection.pojo.dto.VehicleInspectionQuery;
 import com.xfs.vehicleinspection.pojo.entity.VehicleInspection;

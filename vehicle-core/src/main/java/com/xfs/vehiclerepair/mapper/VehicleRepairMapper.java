@@ -1,4 +1,4 @@
-﻿package com.xfs.vehiclerepair.mapper;
+package com.xfs.vehiclerepair.mapper;
 
 import com.xfs.vehiclerepair.pojo.dto.VehicleRepairQuery;
 import com.xfs.vehiclerepair.pojo.entity.VehicleRepair;

@@ -1,4 +1,4 @@
-﻿package com.xfs.vehicleinsurance.mapper;
+package com.xfs.vehicleinsurance.mapper;
 
 import com.xfs.vehicleinsurance.pojo.dto.VehicleInsuranceQuery;
 import com.xfs.vehicleinsurance.pojo.entity.VehicleInsurance;

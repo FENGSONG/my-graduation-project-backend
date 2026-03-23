@@ -1,4 +1,4 @@
-﻿package com.xfs.vehicleinspection.service;
+package com.xfs.vehicleinspection.service;
 
 import com.xfs.vehicleinspection.pojo.dto.VehicleInspectionQuery;
 import com.xfs.vehicleinspection.pojo.dto.VehicleInspectionSaveParam;

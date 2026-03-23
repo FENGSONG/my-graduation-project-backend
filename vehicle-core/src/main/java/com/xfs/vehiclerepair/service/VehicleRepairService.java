@@ -1,4 +1,4 @@
-﻿package com.xfs.vehiclerepair.service;
+package com.xfs.vehiclerepair.service;
 
 import com.xfs.vehiclerepair.pojo.dto.VehicleRepairQuery;
 import com.xfs.vehiclerepair.pojo.dto.VehicleRepairSaveParam;

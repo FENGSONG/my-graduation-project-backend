@@ -1,4 +1,4 @@
-﻿package com.xfs.vehicleinsurance.controller;
+package com.xfs.vehicleinsurance.controller;
 
 import com.github.xiaoymin.knife4j.annotations.ApiOperationSupport;
 import com.xfs.base.auth.AuthGuard;

@@ -1,4 +1,4 @@
-﻿package com.xfs.vehicleinsurance.pojo.entity;
+package com.xfs.vehicleinsurance.pojo.entity;
 
 import lombok.Data;
 
