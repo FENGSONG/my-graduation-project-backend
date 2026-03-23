@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfs.vehicleinsurance.mapper.VehicleInsuranceMapper">
+
+    <select id="selectVehicleInsurance" resultType="com.xfs.vehicleinsurance.pojo.vo.VehicleInsuranceVO">
+        SELECT
+            id, policy_no, company, fee, insured_time, start_time, end_time,
+            applicant, insured_person, contact, vehicle_id, insurance_type, status,
+            remark, create_time, update_time
+        FROM vehicle_insurance
+        <where>
+            <if test="id != null">
+                AND id = #{id}
+            </if>
+            <if test="vehicleId != null">
+                AND vehicle_id = #{vehicleId}
+            </if>
+            <if test="policyNo != null and policyNo != ''">
+                AND policy_no LIKE CONCAT('%', #{policyNo}, '%')
+            </if>
+            <if test="company != null and company != ''">
+                AND company LIKE CONCAT('%', #{company}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="selectByPolicyNo" resultType="com.xfs.vehicleinsurance.pojo.vo.VehicleInsuranceVO">
+        SELECT
+            id, policy_no, company, fee, insured_time, start_time, end_time,
+            applicant, insured_person, contact, vehicle_id, insurance_type, status,
+            remark, create_time, update_time
+        FROM vehicle_insurance
+        WHERE policy_no = #{policyNo}
+        LIMIT 1
+    </select>
+
+    <insert id="insert">
+        INSERT INTO vehicle_insurance(
+            policy_no, company, fee, insured_time, start_time, end_time,
+            applicant, insured_person, contact, vehicle_id, insurance_type, status,
+            remark, create_time
+        ) VALUES (
+            #{policyNo}, #{company}, #{fee}, #{insuredTime}, #{startTime}, #{endTime},
+            #{applicant}, #{insuredPerson}, #{contact}, #{vehicleId}, #{insuranceType}, #{status},
+            #{remark}, #{createTime}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE vehicle_insurance
+        <set>
+            <if test="policyNo != null and policyNo != ''">policy_no = #{policyNo},</if>
+            <if test="company != null and company != ''">company = #{company},</if>
+            <if test="fee != null">fee = #{fee},</if>
+            <if test="insuredTime != null">insured_time = #{insuredTime},</if>
+            <if test="startTime != null">start_time = #{startTime},</if>
+            <if test="endTime != null">end_time = #{endTime},</if>
+            <if test="applicant != null and applicant != ''">applicant = #{applicant},</if>
+            <if test="insuredPerson != null and insuredPerson != ''">insured_person = #{insuredPerson},</if>
+            <if test="contact != null">contact = #{contact},</if>
+            <if test="vehicleId != null">vehicle_id = #{vehicleId},</if>
+            <if test="insuranceType != null and insuranceType != ''">insurance_type = #{insuranceType},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updateTime != null">update_time = #{updateTime}</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM vehicle_insurance WHERE id = #{id}
+    </delete>
+
+</mapper>

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfs.vehiclerepair.mapper.VehicleRepairMapper">
+
+    <select id="selectVehicleRepair" resultType="com.xfs.vehiclerepair.pojo.vo.VehicleRepairVO">
+        SELECT
+            id, repair_item, vehicle_id, repair_person, location, repair_time,
+            fee, condition_desc, material_desc, sender, remark, create_time, update_time
+        FROM vehicle_repair
+        <where>
+            <if test="id != null">
+                AND id = #{id}
+            </if>
+            <if test="vehicleId != null">
+                AND vehicle_id = #{vehicleId}
+            </if>
+            <if test="repairItem != null and repairItem != ''">
+                AND repair_item LIKE CONCAT('%', #{repairItem}, '%')
+            </if>
+            <if test="repairPerson != null and repairPerson != ''">
+                AND repair_person LIKE CONCAT('%', #{repairPerson}, '%')
+            </if>
+        </where>
+        ORDER BY repair_time DESC
+    </select>
+
+    <insert id="insert">
+        INSERT INTO vehicle_repair(
+            repair_item, vehicle_id, repair_person, location, repair_time,
+            fee, condition_desc, material_desc, sender, remark, create_time
+        ) VALUES (
+            #{repairItem}, #{vehicleId}, #{repairPerson}, #{location}, #{repairTime},
+            #{fee}, #{conditionDesc}, #{materialDesc}, #{sender}, #{remark}, #{createTime}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE vehicle_repair
+        <set>
+            <if test="repairItem != null and repairItem != ''">repair_item = #{repairItem},</if>
+            <if test="vehicleId != null">vehicle_id = #{vehicleId},</if>
+            <if test="repairPerson != null and repairPerson != ''">repair_person = #{repairPerson},</if>
+            <if test="location != null and location != ''">location = #{location},</if>
+            <if test="repairTime != null">repair_time = #{repairTime},</if>
+            <if test="fee != null">fee = #{fee},</if>
+            <if test="conditionDesc != null">condition_desc = #{conditionDesc},</if>
+            <if test="materialDesc != null">material_desc = #{materialDesc},</if>
+            <if test="sender != null">sender = #{sender},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updateTime != null">update_time = #{updateTime}</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM vehicle_repair WHERE id = #{id}
+    </delete>
+
+</mapper>
