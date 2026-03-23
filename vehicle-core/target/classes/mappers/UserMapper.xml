@@ -1,69 +1,142 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.xfs.user.mapper.UserMapper">
+    <sql id="BaseUserSelect">
+        SELECT
+            u.id, u.username, u.password, u.email, u.phone, u.age, u.gender,
+            u.create_time, u.update_time, u.status, u.level, u.parent_id,
+            u.org_id, u.role_code, u.enterprise_id, u.company_id, u.dept_id,
+            r.role_name, r.data_scope, r.menu_perms,
+            o.org_name
+        FROM user u
+        LEFT JOIN sys_role r ON r.role_code = u.role_code
+        LEFT JOIN sys_org o ON o.id = u.org_id
+    </sql>
+
+    <select id="selectByAccount" resultType="com.xfs.user.pojo.vo.UserVO">
+        <include refid="BaseUserSelect" />
+        WHERE u.username = #{account}
+           OR u.email = #{account}
+           OR u.phone = #{account}
+        LIMIT 1
+    </select>
+
     <select id="selectByUsername" resultType="com.xfs.user.pojo.vo.UserVO">
-        SELECT id,username,password,email,phone,age,gender,create_time,update_time,status,level,parent_id
-        FROM user
-        WHERE username=#{username}
+        <include refid="BaseUserSelect" />
+        WHERE u.username = #{username}
+        LIMIT 1
     </select>
 
     <select id="selectUser" resultType="com.xfs.user.pojo.vo.UserVO">
-        SELECT id,username,password,email,phone,age,gender,create_time,update_time,status,level,parent_id
-        FROM user
+        <include refid="BaseUserSelect" />
         <where>
             <if test="username != null and username != ''">
-                username LIKE CONCAT('%',#{username},'%')
+                AND u.username LIKE CONCAT('%', #{username}, '%')
+            </if>
+            <if test="account != null and account != ''">
+                AND (
+                    u.username LIKE CONCAT('%', #{account}, '%')
+                    OR u.email LIKE CONCAT('%', #{account}, '%')
+                    OR u.phone LIKE CONCAT('%', #{account}, '%')
+                )
             </if>
             <if test="status != null and status != ''">
-                AND status=#{status}
+                AND u.status = #{status}
             </if>
             <if test="level != null and level != ''">
-                AND level= #{level}
+                AND u.level = #{level}
             </if>
             <if test="id != null">
-                AND id= #{id}
+                AND u.id = #{id}
+            </if>
+            <if test="roleCode != null and roleCode != ''">
+                AND u.role_code = #{roleCode}
+            </if>
+            <if test="orgId != null">
+                AND u.org_id = #{orgId}
+            </if>
+
+            <if test="currentUserId != null and dataScope != null and dataScope != '' and dataScope != 'ALL'">
+                <choose>
+                    <when test="dataScope == 'ENTERPRISE' and currentEnterpriseId != null">
+                        AND u.enterprise_id = #{currentEnterpriseId}
+                    </when>
+                    <when test="dataScope == 'COMPANY' and currentEnterpriseId != null and currentCompanyId != null">
+                        AND u.enterprise_id = #{currentEnterpriseId}
+                        AND u.company_id = #{currentCompanyId}
+                    </when>
+                    <when test="dataScope == 'DEPT' and currentEnterpriseId != null and currentCompanyId != null and currentDeptId != null">
+                        AND u.enterprise_id = #{currentEnterpriseId}
+                        AND u.company_id = #{currentCompanyId}
+                        AND u.dept_id = #{currentDeptId}
+                    </when>
+                    <otherwise>
+                        AND u.id = #{currentUserId}
+                    </otherwise>
+                </choose>
             </if>
         </where>
-        ORDER BY create_time DESC
+        ORDER BY u.create_time DESC
     </select>
 
     <insert id="insert">
-        INSERT INTO user(username,password,email,phone,age,gender,create_time,status,level,parent_id)
-        VALUES(#{username},#{password},#{email},#{phone},#{age},#{gender},#{createTime},#{status},#{level},#{parentId})
+        INSERT INTO user(
+            username, password, email, phone, age, gender, create_time, status, level, parent_id,
+            org_id, role_code, enterprise_id, company_id, dept_id
+        )
+        VALUES(
+            #{username}, #{password}, #{email}, #{phone}, #{age}, #{gender}, #{createTime}, #{status}, #{level}, #{parentId},
+            #{orgId}, #{roleCode}, #{enterpriseId}, #{companyId}, #{deptId}
+        )
     </insert>
 
     <update id="update">
         UPDATE user
         <set>
-            <if test="password!=null and password !=''">
-                password=#{password},
+            <if test="password != null and password != ''">
+                password = #{password},
             </if>
-            <if test="email!=null and email !=''">
-                email=#{email},
+            <if test="email != null and email != ''">
+                email = #{email},
             </if>
-            <if test="level!=null and level !=''">
-                level=#{level},
+            <if test="level != null and level != ''">
+                level = #{level},
             </if>
-            <if test="parentId!=null and parentId !=''">
-                parent_id=#{parentId},
+            <if test="parentId != null">
+                parent_id = #{parentId},
             </if>
-            <if test="phone!=null and phone !=''">
-                phone=#{phone},
+            <if test="phone != null and phone != ''">
+                phone = #{phone},
             </if>
-            <if test="age!=null">
-                age=#{age},
+            <if test="age != null">
+                age = #{age},
             </if>
-            <if test="gender!=null and gender !=''">
-                gender=#{gender},
+            <if test="gender != null and gender != ''">
+                gender = #{gender},
             </if>
-            <if test="status!=null and status !=''">
-                status=#{status},
+            <if test="status != null and status != ''">
+                status = #{status},
             </if>
-            <if test="updateTime!=null">
-                update_time=#{updateTime}
+            <if test="orgId != null">
+                org_id = #{orgId},
+            </if>
+            <if test="roleCode != null and roleCode != ''">
+                role_code = #{roleCode},
+            </if>
+            <if test="enterpriseId != null">
+                enterprise_id = #{enterpriseId},
+            </if>
+            <if test="companyId != null">
+                company_id = #{companyId},
+            </if>
+            <if test="deptId != null">
+                dept_id = #{deptId},
+            </if>
+            <if test="updateTime != null">
+                update_time = #{updateTime}
             </if>
         </set>
-        WHERE id=#{id}
+        WHERE id = #{id}
     </update>
 
     <delete id="deleteById">
@@ -71,8 +144,8 @@
     </delete>
 
     <select id="selectById" resultType="com.xfs.user.pojo.vo.UserVO">
-        SELECT id,username,password,email,phone,age,gender,create_time,update_time,status,level,parent_id
-        FROM user
-        WHERE id=#{id}
+        <include refid="BaseUserSelect" />
+        WHERE u.id = #{id}
+        LIMIT 1
     </select>
 </mapper>

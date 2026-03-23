@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfs.org.mapper.OrgMapper">
+    <select id="selectOrg" resultType="com.xfs.org.pojo.vo.OrgVO">
+        SELECT
+            o.id, o.org_name, o.org_type, o.parent_id, o.org_level,
+            o.enterprise_id, o.company_id, o.leader_user_id, o.sort,
+            o.status, o.create_time, o.update_time,
+            u.username AS leader_username
+        FROM sys_org o
+        LEFT JOIN user u ON u.id = o.leader_user_id
+        <where>
+            <if test="id != null">
+                AND o.id = #{id}
+            </if>
+            <if test="orgName != null and orgName != ''">
+                AND o.org_name LIKE CONCAT('%', #{orgName}, '%')
+            </if>
+            <if test="orgType != null and orgType != ''">
+                AND o.org_type = #{orgType}
+            </if>
+            <if test="parentId != null">
+                AND o.parent_id = #{parentId}
+            </if>
+            <if test="status != null and status != ''">
+                AND o.status = #{status}
+            </if>
+            <if test="enterpriseId != null">
+                AND o.enterprise_id = #{enterpriseId}
+            </if>
+        </where>
+        ORDER BY o.org_level ASC, o.sort ASC, o.id ASC
+    </select>
+
+    <select id="selectById" resultType="com.xfs.org.pojo.vo.OrgVO">
+        SELECT
+            id, org_name, org_type, parent_id, org_level, enterprise_id, company_id,
+            leader_user_id, sort, status, create_time, update_time
+        FROM sys_org
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sys_org(
+            org_name, org_type, parent_id, org_level, enterprise_id, company_id,
+            leader_user_id, sort, status, create_time
+        ) VALUES (
+            #{orgName}, #{orgType}, #{parentId}, #{orgLevel}, #{enterpriseId}, #{companyId},
+            #{leaderUserId}, #{sort}, #{status}, #{createTime}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE sys_org
+        <set>
+            <if test="orgName != null and orgName != ''">org_name = #{orgName},</if>
+            <if test="orgType != null and orgType != ''">org_type = #{orgType},</if>
+            <if test="parentId != null">parent_id = #{parentId},</if>
+            <if test="orgLevel != null">org_level = #{orgLevel},</if>
+            <if test="enterpriseId != null">enterprise_id = #{enterpriseId},</if>
+            <if test="companyId != null">company_id = #{companyId},</if>
+            <if test="leaderUserId != null">leader_user_id = #{leaderUserId},</if>
+            <if test="sort != null">sort = #{sort},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="updateTime != null">update_time = #{updateTime}</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM sys_org WHERE id = #{id}
+    </delete>
+
+    <select id="countChildren" resultType="java.lang.Integer">
+        SELECT COUNT(1) FROM sys_org WHERE parent_id = #{parentId}
+    </select>
+</mapper>

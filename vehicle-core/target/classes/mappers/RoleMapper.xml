@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xfs.role.mapper.RoleMapper">
+    <select id="selectRole" resultType="com.xfs.role.pojo.vo.RoleVO">
+        SELECT
+            id, role_code, role_name, menu_perms, data_scope, status, remark, create_time, update_time
+        FROM sys_role
+        <where>
+            <if test="id != null">
+                AND id = #{id}
+            </if>
+            <if test="roleCode != null and roleCode != ''">
+                AND role_code = #{roleCode}
+            </if>
+            <if test="roleName != null and roleName != ''">
+                AND role_name LIKE CONCAT('%', #{roleName}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="selectByCode" resultType="com.xfs.role.pojo.vo.RoleVO">
+        SELECT
+            id, role_code, role_name, menu_perms, data_scope, status, remark, create_time, update_time
+        FROM sys_role
+        WHERE role_code = #{roleCode}
+        LIMIT 1
+    </select>
+
+    <select id="selectById" resultType="com.xfs.role.pojo.vo.RoleVO">
+        SELECT
+            id, role_code, role_name, menu_perms, data_scope, status, remark, create_time, update_time
+        FROM sys_role
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO sys_role(role_code, role_name, menu_perms, data_scope, status, remark, create_time)
+        VALUES(#{roleCode}, #{roleName}, #{menuPerms}, #{dataScope}, #{status}, #{remark}, #{createTime})
+    </insert>
+
+    <update id="update">
+        UPDATE sys_role
+        <set>
+            <if test="roleCode != null and roleCode != ''">role_code = #{roleCode},</if>
+            <if test="roleName != null and roleName != ''">role_name = #{roleName},</if>
+            <if test="menuPerms != null">menu_perms = #{menuPerms},</if>
+            <if test="dataScope != null and dataScope != ''">data_scope = #{dataScope},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updateTime != null">update_time = #{updateTime}</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM sys_role WHERE id = #{id}
+    </delete>
+</mapper>
